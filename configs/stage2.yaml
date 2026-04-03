@@ -1,0 +1,37 @@
+seed: 42
+
+fold: 0
+
+image_size: 640
+batch_size: 4
+epochs: 25
+
+encoder_lr: 2.0e-5
+decoder_lr: 1.0e-4
+weight_decay: 1.0e-4
+
+bce_weight: 0.5
+dice_weight: 0.5
+pos_weight: 12.0
+
+amp: true
+early_stop_patience: 12
+early_stop_min_delta: 0.0
+
+lr_factor: 0.5
+lr_patience: 3
+min_lr: 1.0e-7
+
+num_workers: 8
+pretrained: false
+device: cuda
+
+threshold: 0.50
+
+defect_train_manifest_template: manifests/defect_fold{fold}_train.csv
+defect_val_manifest_template: manifests/defect_fold{fold}_val.csv
+normal_train_manifest_template: manifests/normal_fold{fold}_train.csv
+normal_val_manifest_template: manifests/normal_fold{fold}_val.csv
+
+stage1_checkpoint_template: outputs/stage1/fold{fold}/best_stage1.pt
+save_dir_template: outputs/stage2/fold{fold}

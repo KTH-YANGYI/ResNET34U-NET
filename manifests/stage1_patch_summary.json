@@ -1,0 +1,90 @@
+{
+  "n_folds": 4,
+  "patch_out_size": 384,
+  "folds": [
+    {
+      "fold_index": 0,
+      "defect_train_image_count": 60,
+      "defect_val_image_count": 21,
+      "normal_train_image_count": 2768,
+      "normal_val_image_count": 564,
+      "train_seed": 1000,
+      "val_seed": 2000,
+      "train_patch_summary": {
+        "positive_count": 240,
+        "hard_negative_count": 129,
+        "normal_negative_count": 129,
+        "total_count": 498
+      },
+      "val_patch_summary": {
+        "positive_count": 84,
+        "hard_negative_count": 39,
+        "normal_negative_count": 39,
+        "total_count": 162
+      }
+    },
+    {
+      "fold_index": 1,
+      "defect_train_image_count": 61,
+      "defect_val_image_count": 20,
+      "normal_train_image_count": 2863,
+      "normal_val_image_count": 469,
+      "train_seed": 1001,
+      "val_seed": 2001,
+      "train_patch_summary": {
+        "positive_count": 244,
+        "hard_negative_count": 105,
+        "normal_negative_count": 105,
+        "total_count": 454
+      },
+      "val_patch_summary": {
+        "positive_count": 80,
+        "hard_negative_count": 66,
+        "normal_negative_count": 66,
+        "total_count": 212
+      }
+    },
+    {
+      "fold_index": 2,
+      "defect_train_image_count": 61,
+      "defect_val_image_count": 20,
+      "normal_train_image_count": 2352,
+      "normal_val_image_count": 980,
+      "train_seed": 1002,
+      "val_seed": 2002,
+      "train_patch_summary": {
+        "positive_count": 244,
+        "hard_negative_count": 139,
+        "normal_negative_count": 139,
+        "total_count": 522
+      },
+      "val_patch_summary": {
+        "positive_count": 80,
+        "hard_negative_count": 30,
+        "normal_negative_count": 30,
+        "total_count": 140
+      }
+    },
+    {
+      "fold_index": 3,
+      "defect_train_image_count": 61,
+      "defect_val_image_count": 20,
+      "normal_train_image_count": 2528,
+      "normal_val_image_count": 804,
+      "train_seed": 1003,
+      "val_seed": 2003,
+      "train_patch_summary": {
+        "positive_count": 244,
+        "hard_negative_count": 125,
+        "normal_negative_count": 125,
+        "total_count": 494
+      },
+      "val_patch_summary": {
+        "positive_count": 80,
+        "hard_negative_count": 36,
+        "normal_negative_count": 36,
+        "total_count": 152
+      }
+    }
+  ]
+}

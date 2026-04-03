@@ -1,0 +1,33 @@
+seed: 42
+
+fold: 0
+
+patch_out_size: 384
+batch_size: 16
+epochs: 30
+
+encoder_lr: 5.0e-5
+decoder_lr: 2.0e-4
+weight_decay: 1.0e-4
+
+bce_weight: 0.5
+dice_weight: 0.5
+pos_weight: 12.0
+
+amp: true
+freeze_encoder_epochs: 3
+early_stop_patience: 12
+early_stop_min_delta: 0.0
+
+lr_factor: 0.5
+lr_patience: 3
+min_lr: 1.0e-7
+
+num_workers: 8
+pretrained: true
+device: cuda
+
+train_index_path_template: manifests/stage1_fold{fold}_train_index.csv
+val_index_path_template: manifests/stage1_fold{fold}_val_index.csv
+
+save_dir_template: outputs/stage1/fold{fold}
