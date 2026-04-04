@@ -18,13 +18,13 @@ from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.metrics import logits_to_probs, probs_to_binary_mask
 from src.model import build_model
 from src.trainer import load_checkpoint, predict_on_loader
-from src.utils import ensure_dir, load_yaml, read_csv_rows, read_json
+from src.utils import ensure_dir, load_yaml, read_csv_rows, read_json, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Infer holdout images with best stage2 model")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="配置文件路径")
-    parser.add_argument("--fold", type=int, default=None, help="覆盖配置中的 fold")
+    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to config file")
+    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -46,10 +46,6 @@ def apply_fold_overrides(cfg, fold):
 
 
 def save_prob_map(path, probs):
-    """
-    把概率图保存成灰度 png。
-    """
-
     path = Path(path)
     ensure_dir(path.parent)
 
@@ -60,10 +56,6 @@ def save_prob_map(path, probs):
 
 
 def save_binary_mask(path, mask):
-    """
-    把二值 mask 保存成 png。
-    """
-
     path = Path(path)
     ensure_dir(path.parent)
 
@@ -89,7 +81,7 @@ def main():
     dataset = ROIDataset(
         holdout_rows,
         image_size=image_size,
-        transform=build_stage2_eval_transform(image_size),
+        transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
 
     loader = DataLoader(
@@ -109,29 +101,54 @@ def main():
 
     val_metrics = read_json(save_dir / "val_metrics.json")
     threshold = float(val_metrics["threshold"])
+    min_area = int(val_metrics.get("min_area", 0))
 
     predictions = predict_on_loader(model, loader, device)
 
     prob_dir = save_dir / "holdout" / "prob_maps"
-    mask_dir = save_dir / "holdout" / "masks"
+    raw_mask_dir = save_dir / "holdout" / "raw_binary_masks"
+    post_mask_dir = save_dir / "holdout" / "masks"
     ensure_dir(prob_dir)
-    ensure_dir(mask_dir)
+    ensure_dir(raw_mask_dir)
+    ensure_dir(post_mask_dir)
+
+    summary_rows = []
 
     for item in predictions:
         image_name = str(item["image_name"])
         stem = Path(image_name).stem
 
         prob_map = logits_to_probs(item["logits"]).squeeze()
-        binary_mask = probs_to_binary_mask(prob_map, threshold)
+        raw_binary_mask = probs_to_binary_mask(prob_map, threshold=threshold, min_area=0)
+        post_binary_mask = probs_to_binary_mask(prob_map, threshold=threshold, min_area=min_area)
 
         save_prob_map(prob_dir / f"{stem}.png", prob_map)
-        save_binary_mask(mask_dir / f"{stem}.png", binary_mask)
+        save_binary_mask(raw_mask_dir / f"{stem}.png", raw_binary_mask)
+        save_binary_mask(post_mask_dir / f"{stem}.png", post_binary_mask)
+
+        summary_rows.append(
+            {
+                "image_name": image_name,
+                "threshold": threshold,
+                "min_area": min_area,
+                "max_prob": float(np.max(prob_map)),
+                "raw_positive_pixels": int(raw_binary_mask.sum()),
+                "post_positive_pixels": int(post_binary_mask.sum()),
+            }
+        )
+
+    write_csv_rows(
+        save_dir / "holdout" / "inference_summary.csv",
+        summary_rows,
+        ["image_name", "threshold", "min_area", "max_prob", "raw_positive_pixels", "post_positive_pixels"],
+    )
 
     print(
         {
             "fold": fold,
             "holdout_count": len(predictions),
             "threshold": threshold,
+            "min_area": min_area,
         }
     )
 

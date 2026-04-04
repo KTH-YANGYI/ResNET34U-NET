@@ -5,6 +5,7 @@ fold: 0
 patch_out_size: 384
 batch_size: 16
 epochs: 30
+n_folds: 4
 
 encoder_lr: 5.0e-5
 decoder_lr: 2.0e-4
@@ -26,6 +27,45 @@ min_lr: 1.0e-7
 num_workers: 8
 pretrained: true
 device: cuda
+
+use_imagenet_normalize: true
+augment_enable: true
+augment_hflip_p: 0.5
+augment_vflip_p: 0.5
+augment_rotate_deg: 15
+augment_brightness: 0.15
+augment_contrast: 0.15
+augment_gamma: 0.15
+augment_noise_std: 0.02
+augment_blur_p: 0.15
+
+stage1_sampler_mode: balanced
+stage1_positive_ratio: 0.50
+stage1_defect_negative_ratio: 0.25
+stage1_normal_ratio: 0.25
+stage1_replay_ratio: 0.0
+stage1_use_video_inverse_freq: true
+stage1_eval_threshold: 0.50
+
+positive_center_crop_sizes: [320, 384, 448]
+positive_shift_crop_sizes: [320, 384, 448]
+positive_context_crop_sizes: [384, 448]
+positive_boundary_crop_sizes: [320, 384, 448]
+negative_crop_sizes: [320, 384, 448]
+
+positive_center_count_per_image: 1
+positive_shift_count_per_image: 2
+positive_context_count_per_image: 1
+positive_boundary_count_per_image: 2
+near_miss_negative_count_per_image: 2
+hard_negative_count_per_image: 3
+near_miss_margin_min: 8
+near_miss_margin_max: 20
+hard_negative_safety_margin: 24
+patch_dedup_iou: 0.70
+max_components_per_image: 3
+max_positive_patches_per_image: 6
+max_attempts_per_patch: 20
 
 train_index_path_template: manifests/stage1_fold{fold}_train_index.csv
 val_index_path_template: manifests/stage1_fold{fold}_val_index.csv

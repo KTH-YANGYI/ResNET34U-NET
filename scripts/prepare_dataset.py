@@ -3,6 +3,7 @@
 """
 
 import sys
+from collections import Counter
 from pathlib import Path
 import random
 
@@ -597,6 +598,77 @@ def collect_unique_video_ids(rows):
     return sort_video_id_list(list(video_id_set))
 
 
+def count_duplicate_values(rows, key):
+    counter = Counter(str(row.get(key, "")).strip() for row in rows)
+    return sum(1 for value, count in counter.items() if value != "" and count > 1)
+
+
+def build_video_distribution(rows):
+    counter = Counter(str(row.get("video_id", "")).strip() for row in rows if str(row.get("video_id", "")).strip() != "")
+    sorted_video_ids = sort_video_id_list(list(counter.keys()))
+    return {video_id: int(counter[video_id]) for video_id in sorted_video_ids}
+
+
+def build_data_audit(
+    defect_rows_raw,
+    holdout_rows_raw,
+    normal_rows_raw,
+    defect_rows,
+    holdout_rows,
+    normal_rows,
+    defect_missing,
+    holdout_missing,
+    normal_missing,
+):
+    return {
+        "raw_scan_counts": {
+            "defect": len(defect_rows_raw),
+            "holdout": len(holdout_rows_raw),
+            "normal": len(normal_rows_raw),
+        },
+        "attached_counts": {
+            "defect": len(defect_rows),
+            "holdout": len(holdout_rows),
+            "normal": len(normal_rows),
+        },
+        "unique_video_id_counts": {
+            "defect": len(collect_unique_video_ids(defect_rows)),
+            "holdout": len(collect_unique_video_ids(holdout_rows)),
+            "normal": len(collect_unique_video_ids(normal_rows)),
+        },
+        "unique_image_name_counts": {
+            "defect": len(set(row["image_name"] for row in defect_rows)),
+            "holdout": len(set(row["image_name"] for row in holdout_rows)),
+            "normal": len(set(row["image_name"] for row in normal_rows)),
+        },
+        "missing_mapping_counts": {
+            "defect": len(defect_missing),
+            "holdout": len(holdout_missing),
+            "normal": len(normal_missing),
+        },
+        "missing_mapping_preview": {
+            "defect": defect_missing[:10],
+            "holdout": holdout_missing[:10],
+            "normal": normal_missing[:10],
+        },
+        "duplicate_image_name_counts": {
+            "defect": count_duplicate_values(defect_rows, "image_name"),
+            "holdout": count_duplicate_values(holdout_rows, "image_name"),
+            "normal": count_duplicate_values(normal_rows, "image_name"),
+        },
+        "duplicate_sample_id_counts": {
+            "defect": count_duplicate_values(defect_rows, "sample_id"),
+            "holdout": count_duplicate_values(holdout_rows, "sample_id"),
+            "normal": count_duplicate_values(normal_rows, "sample_id"),
+        },
+        "per_video_sample_count": {
+            "defect": build_video_distribution(defect_rows),
+            "holdout": build_video_distribution(holdout_rows),
+            "normal": build_video_distribution(normal_rows),
+        },
+    }
+
+
 def build_train_val_rows_for_fold(folds, val_fold_index):
     """
     这个函数的作用：
@@ -769,6 +841,19 @@ def main():
     raise_if_missing_mapping("defect_train_mapping", defect_missing)
     raise_if_missing_mapping("defect_holdout_mapping", holdout_missing)
     raise_if_missing_mapping("normal_mapping", normal_missing)
+
+    data_audit = build_data_audit(
+        defect_rows_raw=defect_rows_raw,
+        holdout_rows_raw=holdout_rows_raw,
+        normal_rows_raw=normal_rows_raw,
+        defect_rows=defect_rows,
+        holdout_rows=holdout_rows,
+        normal_rows=normal_rows,
+        defect_missing=defect_missing,
+        holdout_missing=holdout_missing,
+        normal_missing=normal_missing,
+    )
+    save_json(MANIFEST_DIR / "data_audit.json", data_audit)
 
     # ---------------------------
     # 第 4 步：写基础 manifest

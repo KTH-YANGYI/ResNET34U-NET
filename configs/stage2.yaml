@@ -28,6 +28,25 @@ device: cuda
 
 threshold: 0.50
 
+use_imagenet_normalize: true
+augment_enable: true
+augment_hflip_p: 0.5
+augment_vflip_p: 0.5
+augment_rotate_deg: 10
+augment_brightness: 0.10
+augment_contrast: 0.10
+augment_gamma: 0.0
+augment_noise_std: 0.015
+augment_blur_p: 0.0
+
+target_normal_fpr: 0.10
+lambda_fpr_penalty: 2.0
+threshold_grid_start: 0.10
+threshold_grid_end: 0.90
+threshold_grid_step: 0.02
+min_area_grid: [0, 8, 16, 24, 32, 48]
+random_normal_k_factor: 1.0
+
 defect_train_manifest_template: manifests/defect_fold{fold}_train.csv
 defect_val_manifest_template: manifests/defect_fold{fold}_val.csv
 normal_train_manifest_template: manifests/normal_fold{fold}_train.csv

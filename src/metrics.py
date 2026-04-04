@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import torch
 
@@ -10,10 +11,6 @@ def to_numpy_array(data):
 
 
 def logits_to_probs(logits):
-    """
-    把 logits 转成 0~1 概率图。
-    """
-
     if torch.is_tensor(logits):
         return torch.sigmoid(logits).detach().cpu().numpy()
 
@@ -21,27 +18,69 @@ def logits_to_probs(logits):
     return 1.0 / (1.0 + np.exp(-logits))
 
 
-def probs_to_binary_mask(probs, threshold=0.5):
-    """
-    固定阈值二值化。
-    这里不做任何连通域过滤。
-    """
+def _squeeze_to_hw(data):
+    data = to_numpy_array(data)
 
-    probs = to_numpy_array(probs).astype(np.float32)
+    while data.ndim > 2:
+        data = data.squeeze(0)
 
-    while probs.ndim > 2:
-        probs = probs.squeeze(0)
-
-    return (probs >= float(threshold)).astype(np.uint8)
+    return data
 
 
 def _to_binary_mask(mask):
-    mask = np.asarray(mask).astype(np.uint8)
+    return (_squeeze_to_hw(mask) > 0).astype(np.uint8)
 
-    while mask.ndim > 2:
-        mask = mask.squeeze(0)
 
-    return (mask > 0).astype(np.uint8)
+def connected_component_stats(binary_mask):
+    binary_mask = _to_binary_mask(binary_mask)
+
+    if int(binary_mask.sum()) == 0:
+        return []
+
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
+    results = []
+
+    for label_index in range(1, num_labels):
+        area = int(stats[label_index, cv2.CC_STAT_AREA])
+        if area <= 0:
+            continue
+        results.append({"area": area})
+
+    return results
+
+
+def largest_component_area(binary_mask):
+    stats = connected_component_stats(binary_mask)
+    if len(stats) == 0:
+        return 0
+    return int(max(item["area"] for item in stats))
+
+
+def filter_small_components(binary_mask, min_area=0):
+    binary_mask = _to_binary_mask(binary_mask)
+    min_area = int(min_area)
+
+    if min_area <= 0:
+        return binary_mask
+
+    if int(binary_mask.sum()) == 0:
+        return binary_mask
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
+    filtered_mask = np.zeros_like(binary_mask, dtype=np.uint8)
+
+    for label_index in range(1, num_labels):
+        area = int(stats[label_index, cv2.CC_STAT_AREA])
+        if area >= min_area:
+            filtered_mask[labels == label_index] = 1
+
+    return filtered_mask
+
+
+def probs_to_binary_mask(probs, threshold=0.5, min_area=0):
+    probs = _squeeze_to_hw(probs).astype(np.float32)
+    binary_mask = (probs >= float(threshold)).astype(np.uint8)
+    return filter_small_components(binary_mask, min_area=min_area)
 
 
 def dice_score(pred, target, eps=1e-6):
@@ -71,54 +110,60 @@ def iou_score(pred, target, eps=1e-6):
     return float((intersection + eps) / (union + eps))
 
 
-def compute_defect_seg_metrics(pred_masks, gt_masks):
-    dice_values = []
-    iou_values = []
-
-    for pred_mask, gt_mask in zip(pred_masks, gt_masks):
-        dice_values.append(dice_score(pred_mask, gt_mask))
-        iou_values.append(iou_score(pred_mask, gt_mask))
-
-    if len(dice_values) == 0:
-        return {
-            "defect_dice": 0.0,
-            "defect_iou": 0.0,
-            "defect_count": 0,
-        }
-
-    return {
-        "defect_dice": float(np.mean(dice_values)),
-        "defect_iou": float(np.mean(iou_values)),
-        "defect_count": len(dice_values),
-    }
+def compute_stage2_score(metrics, target_normal_fpr=0.10, lambda_fpr_penalty=2.0):
+    defect_dice = float(metrics.get("defect_dice", 0.0))
+    normal_fpr = float(metrics.get("normal_fpr", 0.0))
+    penalty = float(lambda_fpr_penalty) * max(0.0, normal_fpr - float(target_normal_fpr))
+    return defect_dice - penalty
 
 
-def compute_normal_fpr(pred_masks):
-    if len(pred_masks) == 0:
-        return 0.0
+def compare_stage2_results(current_result, best_result, target_normal_fpr=0.10):
+    if best_result is None:
+        return True
 
-    false_positive_count = 0
+    current_ok = float(current_result["normal_fpr"]) <= float(target_normal_fpr)
+    best_ok = float(best_result["normal_fpr"]) <= float(target_normal_fpr)
 
-    for pred_mask in pred_masks:
-        pred_mask = _to_binary_mask(pred_mask)
-        if int(pred_mask.sum()) > 0:
-            false_positive_count += 1
+    if current_ok and not best_ok:
+        return True
 
-    return float(false_positive_count / len(pred_masks))
+    if current_ok and best_ok:
+        if float(current_result["defect_dice"]) > float(best_result["defect_dice"]):
+            return True
 
+        if (
+            float(current_result["defect_dice"]) == float(best_result["defect_dice"])
+            and float(current_result["normal_fpr"]) < float(best_result["normal_fpr"])
+        ):
+            return True
 
-def compute_defect_image_recall(pred_masks):
-    if len(pred_masks) == 0:
-        return 0.0
+        if (
+            float(current_result["defect_dice"]) == float(best_result["defect_dice"])
+            and float(current_result["normal_fpr"]) == float(best_result["normal_fpr"])
+            and float(current_result.get("defect_image_recall", 0.0)) > float(best_result.get("defect_image_recall", 0.0))
+        ):
+            return True
 
-    recalled_count = 0
+        return False
 
-    for pred_mask in pred_masks:
-        pred_mask = _to_binary_mask(pred_mask)
-        if int(pred_mask.sum()) > 0:
-            recalled_count += 1
+    if not current_ok and not best_ok:
+        if float(current_result.get("stage2_score", -1e9)) > float(best_result.get("stage2_score", -1e9)):
+            return True
 
-    return float(recalled_count / len(pred_masks))
+        if (
+            float(current_result.get("stage2_score", -1e9)) == float(best_result.get("stage2_score", -1e9))
+            and float(current_result["normal_fpr"]) < float(best_result["normal_fpr"])
+        ):
+            return True
+
+        if (
+            float(current_result.get("stage2_score", -1e9)) == float(best_result.get("stage2_score", -1e9))
+            and float(current_result["normal_fpr"]) == float(best_result["normal_fpr"])
+            and float(current_result["defect_dice"]) > float(best_result["defect_dice"])
+        ):
+            return True
+
+    return False
 
 
 def summarize_metrics(per_image_rows):
@@ -126,6 +171,8 @@ def summarize_metrics(per_image_rows):
     defect_iou_values = []
     defect_recall_hits = []
     normal_false_positive_hits = []
+    normal_fp_pixels = []
+    normal_largest_fp_areas = []
 
     for row in per_image_rows:
         if row["is_defect_image"]:
@@ -134,6 +181,8 @@ def summarize_metrics(per_image_rows):
             defect_recall_hits.append(1.0 if row["pred_has_positive"] else 0.0)
         else:
             normal_false_positive_hits.append(1.0 if row["pred_has_positive"] else 0.0)
+            normal_fp_pixels.append(float(row["fp_pixel_count"]))
+            normal_largest_fp_areas.append(float(row["largest_fp_component_area"]))
 
     if len(defect_dice_values) > 0:
         defect_dice = float(np.mean(defect_dice_values))
@@ -146,14 +195,20 @@ def summarize_metrics(per_image_rows):
 
     if len(normal_false_positive_hits) > 0:
         normal_fpr = float(np.mean(normal_false_positive_hits))
+        normal_fp_pixel_mean = float(np.mean(normal_fp_pixels))
+        normal_largest_fp_area_mean = float(np.mean(normal_largest_fp_areas))
     else:
         normal_fpr = 0.0
+        normal_fp_pixel_mean = 0.0
+        normal_largest_fp_area_mean = 0.0
 
     return {
         "defect_dice": defect_dice,
         "defect_iou": defect_iou,
         "defect_image_recall": defect_image_recall,
         "normal_fpr": normal_fpr,
+        "normal_fp_pixel_mean": normal_fp_pixel_mean,
+        "normal_largest_fp_area_mean": normal_largest_fp_area_mean,
         "defect_count": len(defect_dice_values),
         "normal_count": len(normal_false_positive_hits),
     }
@@ -172,11 +227,7 @@ def _is_defect_sample(sample_type, gt_mask):
     return not sample_type.startswith("normal")
 
 
-def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, image_names=None):
-    """
-    用固定阈值把概率图转成二值 mask，然后直接计算指标。
-    """
-
+def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_area=0, image_names=None):
     if image_names is None:
         image_names = [f"sample_{index:05d}" for index in range(len(prob_maps))]
 
@@ -189,11 +240,13 @@ def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, image_n
         sample_types,
         image_names,
     ):
-        pred_mask = probs_to_binary_mask(prob_map, threshold)
+        pred_mask = probs_to_binary_mask(prob_map, threshold=threshold, min_area=min_area)
         gt_mask = _to_binary_mask(gt_mask)
 
         is_defect_image = _is_defect_sample(sample_type, gt_mask)
         pred_has_positive = int(pred_mask.sum()) > 0
+        fp_pixel_count = int(pred_mask.sum()) if not is_defect_image else 0
+        largest_fp_component_area = largest_component_area(pred_mask) if not is_defect_image else 0
 
         if is_defect_image:
             dice_value = dice_score(pred_mask, gt_mask)
@@ -211,16 +264,74 @@ def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, image_n
                 "dice": dice_value,
                 "iou": iou_value,
                 "threshold": float(threshold),
+                "min_area": int(min_area),
+                "fp_pixel_count": fp_pixel_count,
+                "largest_fp_component_area": largest_fp_component_area,
             }
         )
 
         pred_masks.append(pred_mask)
 
     metrics = summarize_metrics(per_image_rows)
-
     return {
         **metrics,
         "threshold": float(threshold),
+        "min_area": int(min_area),
         "per_image_rows": per_image_rows,
         "pred_masks": pred_masks,
+    }
+
+
+def search_postprocess_params(
+    prob_maps,
+    gt_masks,
+    sample_types,
+    threshold_values,
+    min_area_values,
+    image_names=None,
+    target_normal_fpr=0.10,
+    lambda_fpr_penalty=2.0,
+):
+    if image_names is None:
+        image_names = [f"sample_{index:05d}" for index in range(len(prob_maps))]
+
+    best_result = None
+    search_rows = []
+
+    for threshold in threshold_values:
+        for min_area in min_area_values:
+            result = evaluate_prob_maps(
+                prob_maps=prob_maps,
+                gt_masks=gt_masks,
+                sample_types=sample_types,
+                image_names=image_names,
+                threshold=threshold,
+                min_area=min_area,
+            )
+            result["stage2_score"] = compute_stage2_score(
+                result,
+                target_normal_fpr=target_normal_fpr,
+                lambda_fpr_penalty=lambda_fpr_penalty,
+            )
+
+            search_rows.append(
+                {
+                    "threshold": float(result["threshold"]),
+                    "min_area": int(result["min_area"]),
+                    "defect_dice": float(result["defect_dice"]),
+                    "defect_iou": float(result["defect_iou"]),
+                    "defect_image_recall": float(result["defect_image_recall"]),
+                    "normal_fpr": float(result["normal_fpr"]),
+                    "normal_fp_pixel_mean": float(result["normal_fp_pixel_mean"]),
+                    "normal_largest_fp_area_mean": float(result["normal_largest_fp_area_mean"]),
+                    "stage2_score": float(result["stage2_score"]),
+                }
+            )
+
+            if compare_stage2_results(result, best_result, target_normal_fpr=target_normal_fpr):
+                best_result = result
+
+    return {
+        "best_result": best_result,
+        "search_rows": search_rows,
     }

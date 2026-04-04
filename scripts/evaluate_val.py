@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import torch
+from torch.utils.data import DataLoader
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -16,13 +17,11 @@ from src.model import build_model
 from src.trainer import load_checkpoint, validate_stage2
 from src.utils import load_yaml, read_csv_rows, save_json, write_csv_rows
 
-from torch.utils.data import DataLoader
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate best stage2 model on validation set")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="配置文件路径")
-    parser.add_argument("--fold", type=int, default=None, help="覆盖配置中的 fold")
+    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to config file")
+    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -50,6 +49,29 @@ def apply_fold_overrides(cfg, fold):
     return cfg
 
 
+def build_threshold_grid(cfg):
+    if "threshold_grid" in cfg:
+        return [float(item) for item in cfg["threshold_grid"]]
+
+    start = float(cfg.get("threshold_grid_start", 0.10))
+    end = float(cfg.get("threshold_grid_end", 0.90))
+    step = float(cfg.get("threshold_grid_step", 0.02))
+
+    values = []
+    current = start
+
+    while current <= end + 1e-8:
+        values.append(round(current, 6))
+        current += step
+
+    return values
+
+
+def build_min_area_grid(cfg):
+    values = cfg.get("min_area_grid", [0, 8, 16, 24, 32, 48])
+    return [int(item) for item in values]
+
+
 def main():
     args = parse_args()
 
@@ -70,7 +92,7 @@ def main():
     dataset = ROIDataset(
         rows,
         image_size=image_size,
-        transform=build_stage2_eval_transform(image_size),
+        transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
 
     loader = DataLoader(
@@ -86,29 +108,62 @@ def main():
 
     save_dir = resolve_path(cfg["save_dir"])
     checkpoint_path = save_dir / "best_stage2.pt"
-    load_checkpoint(checkpoint_path, model, map_location=device)
+    checkpoint = load_checkpoint(checkpoint_path, model, map_location=device)
 
-    result = validate_stage2(
+    target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
+    lambda_fpr_penalty = float(cfg.get("lambda_fpr_penalty", 2.0))
+    raw_threshold = float(cfg.get("threshold", 0.5))
+
+    raw_result = validate_stage2(
         model=model,
         loader=loader,
         device=device,
-        threshold=float(cfg.get("threshold", 0.5)),
+        threshold=raw_threshold,
+        min_area=0,
+        target_normal_fpr=target_normal_fpr,
+        lambda_fpr_penalty=lambda_fpr_penalty,
     )
+
+    post_result = validate_stage2(
+        model=model,
+        loader=loader,
+        device=device,
+        threshold_values=build_threshold_grid(cfg),
+        min_area_values=build_min_area_grid(cfg),
+        target_normal_fpr=target_normal_fpr,
+        lambda_fpr_penalty=lambda_fpr_penalty,
+    )
+
+    checkpoint_best = checkpoint.get("best_stage2_result", {})
 
     metrics_to_save = {
         "fold": fold,
-        "defect_dice": float(result["defect_dice"]),
-        "defect_iou": float(result["defect_iou"]),
-        "defect_image_recall": float(result["defect_image_recall"]),
-        "normal_fpr": float(result["normal_fpr"]),
-        "threshold": float(result["threshold"]),
-        "defect_count": int(result["defect_count"]),
-        "normal_count": int(result["normal_count"]),
+        "raw_defect_dice": float(raw_result["defect_dice"]),
+        "raw_defect_iou": float(raw_result["defect_iou"]),
+        "raw_defect_image_recall": float(raw_result["defect_image_recall"]),
+        "raw_normal_fpr": float(raw_result["normal_fpr"]),
+        "raw_threshold": float(raw_result["threshold"]),
+        "raw_min_area": int(raw_result["min_area"]),
+        "defect_dice": float(post_result["defect_dice"]),
+        "defect_iou": float(post_result["defect_iou"]),
+        "defect_image_recall": float(post_result["defect_image_recall"]),
+        "normal_fpr": float(post_result["normal_fpr"]),
+        "normal_fp_pixel_mean": float(post_result["normal_fp_pixel_mean"]),
+        "normal_largest_fp_area_mean": float(post_result["normal_largest_fp_area_mean"]),
+        "threshold": float(post_result["threshold"]),
+        "min_area": int(post_result["min_area"]),
+        "stage2_score": float(post_result["stage2_score"]),
+        "defect_count": int(post_result["defect_count"]),
+        "normal_count": int(post_result["normal_count"]),
+        "target_normal_fpr": target_normal_fpr,
+        "lambda_fpr_penalty": lambda_fpr_penalty,
+        "checkpoint_best_threshold": checkpoint_best.get("threshold", None),
+        "checkpoint_best_min_area": checkpoint_best.get("min_area", None),
     }
 
     save_json(save_dir / "val_metrics.json", metrics_to_save)
 
-    fieldnames = [
+    per_image_fieldnames = [
         "image_name",
         "sample_type",
         "is_defect_image",
@@ -116,8 +171,24 @@ def main():
         "dice",
         "iou",
         "threshold",
+        "min_area",
+        "fp_pixel_count",
+        "largest_fp_component_area",
     ]
-    write_csv_rows(save_dir / "val_per_image.csv", result["per_image_rows"], fieldnames)
+    write_csv_rows(save_dir / "val_per_image.csv", post_result["per_image_rows"], per_image_fieldnames)
+
+    search_fieldnames = [
+        "threshold",
+        "min_area",
+        "defect_dice",
+        "defect_iou",
+        "defect_image_recall",
+        "normal_fpr",
+        "normal_fp_pixel_mean",
+        "normal_largest_fp_area_mean",
+        "stage2_score",
+    ]
+    write_csv_rows(save_dir / "val_postprocess_search.csv", post_result["search_rows"], search_fieldnames)
 
     print(metrics_to_save)
 

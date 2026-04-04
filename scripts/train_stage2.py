@@ -1,7 +1,7 @@
 import argparse
-import random
 import sys
 from pathlib import Path
+import random
 
 import torch
 from torch.utils.data import DataLoader
@@ -15,23 +15,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.datasets import ROIDataset, build_stage2_eval_transform, build_stage2_train_transform
 from src.losses import BCEDiceLoss
+from src.metrics import compare_stage2_results
 from src.model import build_model
-from src.trainer import (
-    EarlyStopper,
-    build_optimizer,
-    build_scheduler,
-    load_checkpoint,
-    save_checkpoint,
-    train_one_epoch,
-    validate_stage2,
-)
+from src.trainer import EarlyStopper, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train stage2 full-image segmentation model")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="配置文件路径")
-    parser.add_argument("--fold", type=int, default=None, help="覆盖配置中的 fold")
+    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to config file")
+    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -49,7 +42,7 @@ def build_device(cfg):
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if device_text == "cuda" and not torch.cuda.is_available():
-        raise ValueError("配置要求使用 CUDA，但当前环境没有可用 CUDA")
+        raise ValueError("CUDA was requested but is not available")
 
     return torch.device(device_text)
 
@@ -85,10 +78,6 @@ def build_scaler(cfg, device):
 
 
 def sample_normal_rows(normal_rows, k, seed):
-    """
-    从 normal_train 里采样一部分 normal 图。
-    """
-
     normal_rows = list(normal_rows)
     if k <= 0 or len(normal_rows) == 0:
         return []
@@ -103,22 +92,16 @@ def sample_normal_rows(normal_rows, k, seed):
     return rng.sample(normal_rows, k)
 
 
-def build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed):
-    """
-    构造当前 epoch 的 stage2 训练样本。
-
-    规则：
-    1. defect_train 全部保留
-    2. 再从 normal_train 里采样与 defect 数量接近的一部分
-    3. 最后把两者混合并打乱
-    """
-
+def build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed, cfg):
     defect_train_rows = list(defect_train_rows)
     normal_train_rows = list(normal_train_rows)
 
+    random_normal_k_factor = float(cfg.get("random_normal_k_factor", 1.0))
+    target_normal_count = int(round(len(defect_train_rows) * random_normal_k_factor))
+
     sampled_normal_rows = sample_normal_rows(
         normal_rows=normal_train_rows,
-        k=len(defect_train_rows),
+        k=target_normal_count,
         seed=epoch_seed,
     )
 
@@ -126,7 +109,6 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed):
 
     rng = random.Random(epoch_seed)
     rng.shuffle(epoch_rows)
-
     return epoch_rows
 
 
@@ -139,7 +121,7 @@ def build_stage2_train_loader(rows, cfg, device):
     dataset = ROIDataset(
         rows,
         image_size=image_size,
-        transform=build_stage2_train_transform(image_size),
+        transform=build_stage2_train_transform(image_size, cfg=cfg),
     )
 
     generator = torch.Generator()
@@ -149,7 +131,7 @@ def build_stage2_train_loader(rows, cfg, device):
     worker_init_fn = seed_worker if num_workers > 0 else None
     persistent_workers = num_workers > 0
 
-    loader = DataLoader(
+    return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=True,
@@ -159,8 +141,6 @@ def build_stage2_train_loader(rows, cfg, device):
         generator=generator,
         persistent_workers=persistent_workers,
     )
-
-    return loader
 
 
 def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
@@ -174,7 +154,7 @@ def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
     dataset = ROIDataset(
         rows,
         image_size=image_size,
-        transform=build_stage2_eval_transform(image_size),
+        transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
 
     generator = torch.Generator()
@@ -184,7 +164,7 @@ def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
     worker_init_fn = seed_worker if num_workers > 0 else None
     persistent_workers = num_workers > 0
 
-    loader = DataLoader(
+    return DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
@@ -195,46 +175,28 @@ def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
         persistent_workers=persistent_workers,
     )
 
-    return loader
+
+def build_threshold_grid(cfg):
+    if "threshold_grid" in cfg:
+        return [float(item) for item in cfg["threshold_grid"]]
+
+    start = float(cfg.get("threshold_grid_start", 0.10))
+    end = float(cfg.get("threshold_grid_end", 0.90))
+    step = float(cfg.get("threshold_grid_step", 0.02))
+
+    values = []
+    current = start
+
+    while current <= end + 1e-8:
+        values.append(round(current, 6))
+        current += step
+
+    return values
 
 
-def stage2_result_is_better(current_result, best_result):
-    """
-    按 stage2 的规则比较两个 checkpoint 结果谁更好。
-    """
-
-    if best_result is None:
-        return True
-
-    current_ok = float(current_result["normal_fpr"]) <= 0.10
-    best_ok = float(best_result["normal_fpr"]) <= 0.10
-
-    if current_ok and not best_ok:
-        return True
-
-    if current_ok and best_ok:
-        if float(current_result["defect_dice"]) > float(best_result["defect_dice"]):
-            return True
-
-        if (
-            float(current_result["defect_dice"]) == float(best_result["defect_dice"])
-            and float(current_result["normal_fpr"]) < float(best_result["normal_fpr"])
-        ):
-            return True
-
-        return False
-
-    if not current_ok and not best_ok:
-        if float(current_result["normal_fpr"]) < float(best_result["normal_fpr"]):
-            return True
-
-        if (
-            float(current_result["normal_fpr"]) == float(best_result["normal_fpr"])
-            and float(current_result["defect_dice"]) > float(best_result["defect_dice"])
-        ):
-            return True
-
-    return False
+def build_min_area_grid(cfg):
+    values = cfg.get("min_area_grid", [0, 8, 16, 24, 32, 48])
+    return [int(item) for item in values]
 
 
 def save_history_csv(path, history_rows):
@@ -245,7 +207,11 @@ def save_history_csv(path, history_rows):
         "defect_iou",
         "defect_image_recall",
         "normal_fpr",
+        "normal_fp_pixel_mean",
+        "normal_largest_fp_area_mean",
         "threshold",
+        "min_area",
+        "stage2_score",
         "lr_encoder",
         "lr_decoder",
     ]
@@ -256,7 +222,6 @@ def main():
     args = parse_args()
 
     cfg = load_yaml(resolve_path(args.config))
-
     fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
     cfg = apply_fold_overrides(cfg, fold)
 
@@ -294,7 +259,10 @@ def main():
     )
 
     epochs = int(cfg.get("epochs", 25))
-    threshold = float(cfg.get("threshold", 0.5))
+    target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
+    lambda_fpr_penalty = float(cfg.get("lambda_fpr_penalty", 2.0))
+    threshold_grid = build_threshold_grid(cfg)
+    min_area_grid = build_min_area_grid(cfg)
 
     save_dir = resolve_path(cfg["save_dir"])
     ensure_dir(save_dir)
@@ -319,7 +287,7 @@ def main():
         epoch = epoch_index + 1
         epoch_seed = int(cfg.get("seed", 42)) + epoch
 
-        epoch_train_rows = build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed)
+        epoch_train_rows = build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed, cfg)
         train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device)
 
         train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device)
@@ -328,11 +296,34 @@ def main():
             model=model,
             loader=val_loader,
             device=device,
-            threshold=threshold,
+            threshold_values=threshold_grid,
+            min_area_values=min_area_grid,
+            target_normal_fpr=target_normal_fpr,
+            lambda_fpr_penalty=lambda_fpr_penalty,
         )
 
-        scheduler.step(float(val_stats["defect_dice"]))
-        should_stop, _ = early_stopper.step(float(val_stats["defect_dice"]))
+        stage2_score = float(val_stats["stage2_score"])
+        scheduler.step(stage2_score)
+        should_stop, _ = early_stopper.step(stage2_score)
+
+        current_is_best = compare_stage2_results(
+            val_stats,
+            best_stage2_result,
+            target_normal_fpr=target_normal_fpr,
+        )
+
+        if current_is_best:
+            best_stage2_result = {
+                "defect_dice": float(val_stats["defect_dice"]),
+                "defect_iou": float(val_stats["defect_iou"]),
+                "defect_image_recall": float(val_stats["defect_image_recall"]),
+                "normal_fpr": float(val_stats["normal_fpr"]),
+                "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
+                "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
+                "threshold": float(val_stats["threshold"]),
+                "min_area": int(val_stats["min_area"]),
+                "stage2_score": float(val_stats["stage2_score"]),
+            }
 
         history_rows.append(
             {
@@ -342,23 +333,16 @@ def main():
                 "defect_iou": val_stats["defect_iou"],
                 "defect_image_recall": val_stats["defect_image_recall"],
                 "normal_fpr": val_stats["normal_fpr"],
+                "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
+                "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
                 "threshold": val_stats["threshold"],
+                "min_area": val_stats["min_area"],
+                "stage2_score": val_stats["stage2_score"],
                 "lr_encoder": train_stats["lr_encoder"],
                 "lr_decoder": train_stats["lr_decoder"],
             }
         )
         save_history_csv(history_path, history_rows)
-
-        current_is_best = stage2_result_is_better(val_stats, best_stage2_result)
-
-        if current_is_best:
-            best_stage2_result = {
-                "defect_dice": float(val_stats["defect_dice"]),
-                "defect_iou": float(val_stats["defect_iou"]),
-                "defect_image_recall": float(val_stats["defect_image_recall"]),
-                "normal_fpr": float(val_stats["normal_fpr"]),
-                "threshold": float(val_stats["threshold"]),
-            }
 
         checkpoint = {
             "epoch": epoch,
@@ -370,11 +354,15 @@ def main():
             "early_stopper_state_dict": early_stopper.state_dict(),
             "best_stage2_result": best_stage2_result,
             "current_val_stats": {
-                "defect_dice": val_stats["defect_dice"],
-                "defect_iou": val_stats["defect_iou"],
-                "defect_image_recall": val_stats["defect_image_recall"],
-                "normal_fpr": val_stats["normal_fpr"],
-                "threshold": val_stats["threshold"],
+                "defect_dice": float(val_stats["defect_dice"]),
+                "defect_iou": float(val_stats["defect_iou"]),
+                "defect_image_recall": float(val_stats["defect_image_recall"]),
+                "normal_fpr": float(val_stats["normal_fpr"]),
+                "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
+                "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
+                "threshold": float(val_stats["threshold"]),
+                "min_area": int(val_stats["min_area"]),
+                "stage2_score": float(val_stats["stage2_score"]),
             },
         }
 
@@ -394,15 +382,17 @@ def main():
             f"defect_recall={val_stats['defect_image_recall']:.6f} | "
             f"normal_fpr={val_stats['normal_fpr']:.6f} | "
             f"thr={val_stats['threshold']:.2f} | "
+            f"min_area={val_stats['min_area']} | "
+            f"stage2_score={val_stats['stage2_score']:.6f} | "
             f"lr_encoder={train_stats['lr_encoder']:.6e} | "
             f"lr_decoder={train_stats['lr_decoder']:.6e}"
         )
 
         if should_stop:
-            print("early stopping 触发，stage2 提前结束。")
+            print("early stopping triggered, stage2 stopped early.")
             break
 
-    print("stage2 训练结束。")
+    print("stage2 training finished.")
 
 
 if __name__ == "__main__":

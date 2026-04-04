@@ -1,9 +1,11 @@
 import argparse
+import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -12,28 +14,17 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.datasets import (
-    PatchDataset,
-    build_stage1_eval_transform,
-    build_stage1_train_transform,
-)
+from src.datasets import PatchDataset, build_stage1_eval_transform, build_stage1_train_transform
 from src.losses import BCEDiceLoss
 from src.model import build_model
-from src.trainer import (
-    EarlyStopper,
-    build_optimizer,
-    build_scheduler,
-    save_checkpoint,
-    train_one_epoch,
-    validate_stage1,
-)
+from src.trainer import EarlyStopper, build_optimizer, build_scheduler, save_checkpoint, train_one_epoch, validate_stage1
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train stage1 patch model")
-    parser.add_argument("--config", type=str, default="configs/stage1.yaml", help="配置文件路径")
-    parser.add_argument("--fold", type=int, default=None, help="覆盖配置中的 fold")
+    parser.add_argument("--config", type=str, default="configs/stage1.yaml", help="Path to config file")
+    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -51,7 +42,7 @@ def build_device(cfg):
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if device_text == "cuda" and not torch.cuda.is_available():
-        raise ValueError("配置要求使用 CUDA，但当前环境没有可用 CUDA")
+        raise ValueError("CUDA was requested but is not available")
 
     return torch.device(device_text)
 
@@ -72,6 +63,65 @@ def apply_fold_overrides(cfg, fold):
     return cfg
 
 
+def infer_patch_family(row):
+    patch_family = str(row.get("patch_family", "")).strip()
+    if patch_family != "":
+        return patch_family
+
+    patch_type = str(row.get("patch_type", "")).strip()
+
+    if patch_type.startswith("positive"):
+        return "positive"
+    if patch_type in {"near_miss_negative", "hard_negative"}:
+        return "defect_negative"
+    if patch_type == "normal_negative":
+        return "normal_negative"
+    return "unknown"
+
+
+def build_stage1_sampler(train_rows, cfg, generator):
+    sampler_mode = str(cfg.get("stage1_sampler_mode", "shuffle")).strip().lower()
+    if sampler_mode != "balanced":
+        return None
+
+    desired_ratios = {
+        "positive": float(cfg.get("stage1_positive_ratio", 0.50)),
+        "defect_negative": float(cfg.get("stage1_defect_negative_ratio", 0.25)),
+        "normal_negative": float(cfg.get("stage1_normal_ratio", 0.25)),
+        "replay": float(cfg.get("stage1_replay_ratio", 0.0)),
+    }
+
+    family_counts = Counter(infer_patch_family(row) for row in train_rows)
+    video_counts = Counter(str(row.get("video_id", "")).strip() or "__missing__" for row in train_rows)
+    use_video_inverse_freq = bool(cfg.get("stage1_use_video_inverse_freq", True))
+
+    weights = []
+
+    for row in train_rows:
+        family = infer_patch_family(row)
+        video_id = str(row.get("video_id", "")).strip() or "__missing__"
+
+        family_count = max(1, family_counts[family])
+        family_ratio = desired_ratios.get(family, 0.0)
+
+        if family_ratio <= 0.0:
+            family_ratio = 1.0 / max(1, len(train_rows))
+
+        weight = family_ratio / family_count
+
+        if use_video_inverse_freq:
+            weight *= 1.0 / max(1, video_counts[video_id])
+
+        weights.append(weight)
+
+    return WeightedRandomSampler(
+        weights=torch.as_tensor(weights, dtype=torch.double),
+        num_samples=len(train_rows),
+        replacement=True,
+        generator=generator,
+    )
+
+
 def build_stage1_loaders(cfg, device):
     train_rows = read_csv_rows(resolve_path(cfg["train_index_path"]))
     val_rows = read_csv_rows(resolve_path(cfg["val_index_path"]))
@@ -83,11 +133,11 @@ def build_stage1_loaders(cfg, device):
 
     train_dataset = PatchDataset(
         train_rows,
-        transform=build_stage1_train_transform(patch_out_size),
+        transform=build_stage1_train_transform(patch_out_size, cfg=cfg),
     )
     val_dataset = PatchDataset(
         val_rows,
-        transform=build_stage1_eval_transform(patch_out_size),
+        transform=build_stage1_eval_transform(patch_out_size, cfg=cfg),
     )
 
     generator = torch.Generator()
@@ -96,11 +146,13 @@ def build_stage1_loaders(cfg, device):
     pin_memory = device.type == "cuda"
     worker_init_fn = seed_worker if num_workers > 0 else None
     persistent_workers = num_workers > 0
+    sampler = build_stage1_sampler(train_rows, cfg, generator)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=sampler is None,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         worker_init_fn=worker_init_fn,
@@ -138,18 +190,46 @@ def save_history_csv(path, history_rows):
         "encoder_frozen",
         "train_loss",
         "val_loss",
-        "patch_dice",
+        "patch_dice_all",
+        "patch_dice_pos_only",
+        "positive_patch_recall",
+        "negative_patch_fpr",
+        "stage1_score",
+        "patch_dice_by_type_json",
+        "count_by_type_json",
         "lr_encoder",
         "lr_decoder",
     ]
     write_csv_rows(path, history_rows, fieldnames)
 
 
+def stage1_result_is_better(current_result, best_result):
+    if best_result is None:
+        return True
+
+    if float(current_result["patch_dice_pos_only"]) > float(best_result["patch_dice_pos_only"]):
+        return True
+
+    if (
+        float(current_result["patch_dice_pos_only"]) == float(best_result["patch_dice_pos_only"])
+        and float(current_result["negative_patch_fpr"]) < float(best_result["negative_patch_fpr"])
+    ):
+        return True
+
+    if (
+        float(current_result["patch_dice_pos_only"]) == float(best_result["patch_dice_pos_only"])
+        and float(current_result["negative_patch_fpr"]) == float(best_result["negative_patch_fpr"])
+        and float(current_result["positive_patch_recall"]) > float(best_result["positive_patch_recall"])
+    ):
+        return True
+
+    return False
+
+
 def main():
     args = parse_args()
 
     cfg = load_yaml(resolve_path(args.config))
-
     fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
     cfg = apply_fold_overrides(cfg, fold)
 
@@ -179,6 +259,7 @@ def main():
 
     epochs = int(cfg.get("epochs", 30))
     freeze_encoder_epochs = int(cfg.get("freeze_encoder_epochs", 3))
+    eval_threshold = float(cfg.get("stage1_eval_threshold", 0.5))
 
     save_dir = resolve_path(cfg["save_dir"])
     ensure_dir(save_dir)
@@ -188,6 +269,7 @@ def main():
     history_path = save_dir / "history.csv"
 
     history_rows = []
+    best_stage1_result = None
 
     print(f"fold = {fold}")
     print(f"device = {device}")
@@ -197,17 +279,26 @@ def main():
 
     for epoch_index in range(epochs):
         epoch = epoch_index + 1
-
         encoder_trainable = epoch_index >= freeze_encoder_epochs
         model.set_encoder_trainable(encoder_trainable)
 
         train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device)
-        val_stats = validate_stage1(model, val_loader, criterion, device)
+        val_stats = validate_stage1(model, val_loader, criterion, device, threshold=eval_threshold)
 
-        current_patch_dice = float(val_stats["patch_dice"])
-        scheduler.step(current_patch_dice)
+        stage1_score = float(val_stats["patch_dice_pos_only"])
+        scheduler.step(stage1_score)
+        should_stop, _ = early_stopper.step(stage1_score)
 
-        should_stop, is_best = early_stopper.step(current_patch_dice)
+        current_is_best = stage1_result_is_better(val_stats, best_stage1_result)
+        if current_is_best:
+            best_stage1_result = {
+                "patch_dice_all": float(val_stats["patch_dice_all"]),
+                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
+                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
+                "count_by_type": dict(val_stats["count_by_type"]),
+            }
 
         history_rows.append(
             {
@@ -215,7 +306,13 @@ def main():
                 "encoder_frozen": not encoder_trainable,
                 "train_loss": train_stats["loss"],
                 "val_loss": val_stats["val_loss"],
-                "patch_dice": val_stats["patch_dice"],
+                "patch_dice_all": val_stats["patch_dice_all"],
+                "patch_dice_pos_only": val_stats["patch_dice_pos_only"],
+                "positive_patch_recall": val_stats["positive_patch_recall"],
+                "negative_patch_fpr": val_stats["negative_patch_fpr"],
+                "stage1_score": stage1_score,
+                "patch_dice_by_type_json": json.dumps(val_stats["patch_dice_by_type"], ensure_ascii=False, sort_keys=True),
+                "count_by_type_json": json.dumps(val_stats["count_by_type"], ensure_ascii=False, sort_keys=True),
                 "lr_encoder": train_stats["lr_encoder"],
                 "lr_decoder": train_stats["lr_decoder"],
             }
@@ -230,7 +327,15 @@ def main():
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
             "early_stopper_state_dict": early_stopper.state_dict(),
-            "best_patch_dice": early_stopper.best_score,
+            "best_stage1_result": best_stage1_result,
+            "current_val_stats": {
+                "patch_dice_all": float(val_stats["patch_dice_all"]),
+                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
+                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
+                "count_by_type": dict(val_stats["count_by_type"]),
+            },
         }
 
         if scaler is not None:
@@ -238,7 +343,7 @@ def main():
 
         save_checkpoint(last_ckpt_path, checkpoint)
 
-        if is_best:
+        if current_is_best:
             save_checkpoint(best_ckpt_path, checkpoint)
 
         print(
@@ -246,16 +351,19 @@ def main():
             f"encoder_frozen={not encoder_trainable} | "
             f"train_loss={train_stats['loss']:.6f} | "
             f"val_loss={val_stats['val_loss']:.6f} | "
-            f"patch_dice={val_stats['patch_dice']:.6f} | "
+            f"patch_dice_all={val_stats['patch_dice_all']:.6f} | "
+            f"patch_dice_pos_only={val_stats['patch_dice_pos_only']:.6f} | "
+            f"positive_recall={val_stats['positive_patch_recall']:.6f} | "
+            f"negative_fpr={val_stats['negative_patch_fpr']:.6f} | "
             f"lr_encoder={train_stats['lr_encoder']:.6e} | "
             f"lr_decoder={train_stats['lr_decoder']:.6e}"
         )
 
         if should_stop:
-            print("early stopping 触发，stage1 提前结束。")
+            print("early stopping triggered, stage1 stopped early.")
             break
 
-    print("stage1 训练结束。")
+    print("stage1 training finished.")
 
 
 if __name__ == "__main__":
