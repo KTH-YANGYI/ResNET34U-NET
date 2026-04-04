@@ -2,3 +2,5 @@ dataset_new/
 当前项目逻辑说明.md
 ResNET34U_NET_Codex_最终修改建议.md
 manifests
+__pycache__/
+*.py[cod]
