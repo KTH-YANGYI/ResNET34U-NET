@@ -27,6 +27,7 @@ from src.model import build_model
 from src.trainer import EarlyStopper, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 from src.wandb_utils import finish_wandb_run, init_wandb_run, log_wandb_metrics, update_wandb_summary
+from scripts.evaluate_val import evaluate_and_save_stage2
 
 
 def parse_args():
@@ -540,12 +541,26 @@ def main():
                 print("early stopping triggered, stage2 stopped early.")
                 break
     finally:
+        auto_eval_metrics = None
+        if bool(cfg.get("auto_evaluate_after_train", True)) and best_ckpt_path.exists():
+            try:
+                auto_eval_metrics = evaluate_and_save_stage2(
+                    cfg=cfg,
+                    fold=fold,
+                    checkpoint_path=best_ckpt_path,
+                    progress_desc="Auto eval",
+                )
+                print("automatic validation export finished.")
+            except Exception as exc:
+                print(f"Warning: automatic validation export failed. Detail: {exc}")
+
         update_wandb_summary(
             wandb_run,
             {
                 "stage2/best": best_stage2_result or {},
                 "stage2/final_hard_normal_summary": hard_normal_summary,
                 "stage2/history_rows": len(history_rows),
+                "stage2/auto_eval": auto_eval_metrics or {},
             },
         )
         finish_wandb_run(wandb_run)

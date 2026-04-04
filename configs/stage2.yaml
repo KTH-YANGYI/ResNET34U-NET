@@ -33,6 +33,7 @@ wandb_group: baseline
 wandb_job_type: train
 wandb_run_name_template: "{stage}_fold{fold}"
 wandb_tags: ["stage2"]
+auto_evaluate_after_train: true
 
 threshold: 0.50
 

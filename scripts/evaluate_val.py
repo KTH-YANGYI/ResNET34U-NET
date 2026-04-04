@@ -72,13 +72,7 @@ def build_min_area_grid(cfg):
     return [int(item) for item in values]
 
 
-def main():
-    args = parse_args()
-
-    cfg = load_yaml(resolve_path(args.config))
-    fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
-    cfg = apply_fold_overrides(cfg, fold)
-
+def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None):
     device = torch.device("cuda" if torch.cuda.is_available() and str(cfg.get("device", "auto")).lower() != "cpu" else "cpu")
 
     defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
@@ -107,7 +101,10 @@ def main():
     model.to(device)
 
     save_dir = resolve_path(cfg["save_dir"])
-    checkpoint_path = save_dir / "best_stage2.pt"
+    if checkpoint_path is None:
+        checkpoint_path = save_dir / "best_stage2.pt"
+    else:
+        checkpoint_path = resolve_path(checkpoint_path)
     checkpoint = load_checkpoint(checkpoint_path, model, map_location=device)
 
     target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
@@ -122,6 +119,7 @@ def main():
         min_area=0,
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
+        progress_desc=None if progress_desc is None else f"{progress_desc} raw",
     )
 
     post_result = validate_stage2(
@@ -132,6 +130,7 @@ def main():
         min_area_values=build_min_area_grid(cfg),
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
+        progress_desc=None if progress_desc is None else f"{progress_desc} post",
     )
 
     checkpoint_best = checkpoint.get("best_stage2_result", {})
@@ -190,6 +189,16 @@ def main():
     ]
     write_csv_rows(save_dir / "val_postprocess_search.csv", post_result["search_rows"], search_fieldnames)
 
+    return metrics_to_save
+
+
+def main():
+    args = parse_args()
+
+    cfg = load_yaml(resolve_path(args.config))
+    fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
+    cfg = apply_fold_overrides(cfg, fold)
+    metrics_to_save = evaluate_and_save_stage2(cfg=cfg, fold=fold)
     print(metrics_to_save)
 
 
