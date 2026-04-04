@@ -1,8 +1,35 @@
+import sys
 from pathlib import Path
 
 import torch
 
 from src.utils import ensure_dir
+
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    tqdm = None
+
+
+class _NullProgress:
+    def __init__(self, iterable):
+        self.iterable = iterable
+
+    def __iter__(self):
+        return iter(self.iterable)
+
+    def set_postfix(self, *args, **kwargs):
+        return None
+
+    def close(self):
+        return None
+
+
+def build_progress(iterable, desc=None, leave=False):
+    if tqdm is None or not sys.stderr.isatty():
+        return _NullProgress(iterable)
+
+    return tqdm(iterable, desc=desc, leave=leave, dynamic_ncols=True)
 
 
 def get_cfg_value(cfg, key, default_value):
@@ -133,7 +160,7 @@ def compute_binary_dice_from_logits(logits, target, threshold=0.5, eps=1e-6):
     return compute_binary_dice_per_sample_from_logits(logits, target, threshold=threshold, eps=eps)["dice"].mean()
 
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, progress_desc=None):
     model.train()
 
     total_loss = 0.0
@@ -141,29 +168,38 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
 
     use_amp = device.type == "cuda" and scaler is not None and scaler.is_enabled()
 
-    for batch in loader:
-        images, masks = batch_to_device(batch, device)
-        batch_size = images.shape[0]
+    progress = build_progress(loader, desc=progress_desc, leave=False)
 
-        optimizer.zero_grad(set_to_none=True)
+    try:
+        for batch in progress:
+            images, masks = batch_to_device(batch, device)
+            batch_size = images.shape[0]
 
-        with torch.amp.autocast(device_type=device.type, enabled=use_amp):
-            logits = model(images)
-            loss = criterion(logits, masks)
+            optimizer.zero_grad(set_to_none=True)
 
-        if not torch.isfinite(loss):
-            raise ValueError(f"Training produced non-finite loss: {float(loss.detach())}")
+            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+                logits = model(images)
+                loss = criterion(logits, masks)
 
-        if use_amp:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            optimizer.step()
+            if not torch.isfinite(loss):
+                raise ValueError(f"Training produced non-finite loss: {float(loss.detach())}")
 
-        total_loss += float(loss.detach()) * batch_size
-        total_samples += batch_size
+            if use_amp:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+
+            total_loss += float(loss.detach()) * batch_size
+            total_samples += batch_size
+            progress.set_postfix(
+                batch_loss=f"{float(loss.detach()):.4f}",
+                avg_loss=f"{(total_loss / total_samples):.4f}",
+            )
+    finally:
+        progress.close()
 
     if total_samples == 0:
         raise ValueError("Training loader is empty")
@@ -190,74 +226,85 @@ def extract_batch_value(batch, key, index):
     return value
 
 
-def predict_on_loader(model, loader, device):
+def predict_on_loader(model, loader, device, progress_desc=None):
     model.eval()
     results = []
 
-    with torch.no_grad():
-        for batch in loader:
-            images, masks = batch_to_device(batch, device)
-            logits = model(images)
-            batch_size = logits.shape[0]
+    progress = build_progress(loader, desc=progress_desc, leave=False)
 
-            for index in range(batch_size):
-                results.append(
-                    {
-                        "logits": logits[index].detach().cpu(),
-                        "mask": masks[index].detach().cpu(),
-                        "sample_id": extract_batch_value(batch, "sample_id", index),
-                        "image_name": extract_batch_value(batch, "image_name", index),
-                        "video_id": extract_batch_value(batch, "video_id", index),
-                        "video_name": extract_batch_value(batch, "video_name", index),
-                        "frame_id": extract_batch_value(batch, "frame_id", index),
-                        "sample_type": extract_batch_value(batch, "sample_type", index),
-                        "source_split": extract_batch_value(batch, "source_split", index),
-                        "is_labeled": extract_batch_value(batch, "is_labeled", index),
-                        "patch_id": extract_batch_value(batch, "patch_id", index),
-                        "base_sample_id": extract_batch_value(batch, "base_sample_id", index),
-                        "patch_type": extract_batch_value(batch, "patch_type", index),
-                        "patch_family": extract_batch_value(batch, "patch_family", index),
-                    }
-                )
+    with torch.no_grad():
+        try:
+            for batch in progress:
+                images, masks = batch_to_device(batch, device)
+                logits = model(images)
+                batch_size = logits.shape[0]
+
+                for index in range(batch_size):
+                    results.append(
+                        {
+                            "logits": logits[index].detach().cpu(),
+                            "mask": masks[index].detach().cpu(),
+                            "sample_id": extract_batch_value(batch, "sample_id", index),
+                            "image_name": extract_batch_value(batch, "image_name", index),
+                            "video_id": extract_batch_value(batch, "video_id", index),
+                            "video_name": extract_batch_value(batch, "video_name", index),
+                            "frame_id": extract_batch_value(batch, "frame_id", index),
+                            "sample_type": extract_batch_value(batch, "sample_type", index),
+                            "source_split": extract_batch_value(batch, "source_split", index),
+                            "is_labeled": extract_batch_value(batch, "is_labeled", index),
+                            "patch_id": extract_batch_value(batch, "patch_id", index),
+                            "base_sample_id": extract_batch_value(batch, "base_sample_id", index),
+                            "patch_type": extract_batch_value(batch, "patch_type", index),
+                            "patch_family": extract_batch_value(batch, "patch_family", index),
+                        }
+                    )
+        finally:
+            progress.close()
 
     return results
 
 
-def validate_stage1(model, loader, criterion, device, threshold=0.5):
+def validate_stage1(model, loader, criterion, device, threshold=0.5, progress_desc=None):
     model.eval()
 
     total_loss = 0.0
     total_samples = 0
     per_patch_rows = []
 
+    progress = build_progress(loader, desc=progress_desc, leave=False)
+
     with torch.no_grad():
-        for batch in loader:
-            images, masks = batch_to_device(batch, device)
-            batch_size = images.shape[0]
+        try:
+            for batch in progress:
+                images, masks = batch_to_device(batch, device)
+                batch_size = images.shape[0]
 
-            logits = model(images)
-            loss = criterion(logits, masks)
-            dice_info = compute_binary_dice_per_sample_from_logits(logits, masks, threshold=threshold)
+                logits = model(images)
+                loss = criterion(logits, masks)
+                dice_info = compute_binary_dice_per_sample_from_logits(logits, masks, threshold=threshold)
 
-            total_loss += float(loss.detach()) * batch_size
-            total_samples += batch_size
+                total_loss += float(loss.detach()) * batch_size
+                total_samples += batch_size
+                progress.set_postfix(avg_loss=f"{(total_loss / total_samples):.4f}")
 
-            for index in range(batch_size):
-                dice_value = float(dice_info["dice"][index].detach().cpu())
-                pred_sum = float(dice_info["pred_sum"][index].detach().cpu())
-                target_sum = float(dice_info["target_sum"][index].detach().cpu())
-                pred_has_positive = pred_sum > 0.0
-                target_has_positive = target_sum > 0.0
+                for index in range(batch_size):
+                    dice_value = float(dice_info["dice"][index].detach().cpu())
+                    pred_sum = float(dice_info["pred_sum"][index].detach().cpu())
+                    target_sum = float(dice_info["target_sum"][index].detach().cpu())
+                    pred_has_positive = pred_sum > 0.0
+                    target_has_positive = target_sum > 0.0
 
-                per_patch_rows.append(
-                    {
-                        "patch_type": str(extract_batch_value(batch, "patch_type", index) or ""),
-                        "patch_family": str(extract_batch_value(batch, "patch_family", index) or ""),
-                        "dice": dice_value,
-                        "pred_has_positive": pred_has_positive,
-                        "target_has_positive": target_has_positive,
-                    }
-                )
+                    per_patch_rows.append(
+                        {
+                            "patch_type": str(extract_batch_value(batch, "patch_type", index) or ""),
+                            "patch_family": str(extract_batch_value(batch, "patch_family", index) or ""),
+                            "dice": dice_value,
+                            "pred_has_positive": pred_has_positive,
+                            "target_has_positive": target_has_positive,
+                        }
+                    )
+        finally:
+            progress.close()
 
     if total_samples == 0:
         raise ValueError("Validation loader is empty")
@@ -314,10 +361,11 @@ def validate_stage2(
     min_area_values=None,
     target_normal_fpr=0.10,
     lambda_fpr_penalty=2.0,
+    progress_desc=None,
 ):
     from src.metrics import compute_stage2_score, evaluate_prob_maps, logits_to_probs, search_postprocess_params
 
-    predictions = predict_on_loader(model, loader, device)
+    predictions = predict_on_loader(model, loader, device, progress_desc=progress_desc)
 
     if len(predictions) == 0:
         raise ValueError("Validation loader is empty")

@@ -290,7 +290,15 @@ def main():
         epoch_train_rows = build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed, cfg)
         train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device)
 
-        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device)
+        train_stats = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            progress_desc=f"Train {epoch}/{epochs}",
+        )
 
         val_stats = validate_stage2(
             model=model,
@@ -300,6 +308,7 @@ def main():
             min_area_values=min_area_grid,
             target_normal_fpr=target_normal_fpr,
             lambda_fpr_penalty=lambda_fpr_penalty,
+            progress_desc=f"Val {epoch}/{epochs}",
         )
 
         stage2_score = float(val_stats["stage2_score"])

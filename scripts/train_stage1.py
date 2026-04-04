@@ -282,8 +282,23 @@ def main():
         encoder_trainable = epoch_index >= freeze_encoder_epochs
         model.set_encoder_trainable(encoder_trainable)
 
-        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, scaler, device)
-        val_stats = validate_stage1(model, val_loader, criterion, device, threshold=eval_threshold)
+        train_stats = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scaler,
+            device,
+            progress_desc=f"Train {epoch}/{epochs}",
+        )
+        val_stats = validate_stage1(
+            model,
+            val_loader,
+            criterion,
+            device,
+            threshold=eval_threshold,
+            progress_desc=f"Val {epoch}/{epochs}",
+        )
 
         stage1_score = float(val_stats["patch_dice_pos_only"])
         scheduler.step(stage1_score)
