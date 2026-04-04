@@ -524,6 +524,54 @@ def build_defect_folds_by_video(defect_rows, n_folds=4, seed=42):
 
     return folds
 
+
+def build_rows_by_video_folds(rows, n_folds=4, seed=42):
+    if n_folds < 2:
+        raise ValueError("n_folds must be at least 2")
+
+    grouped = group_rows_by_video_id(rows)
+    video_ids = list(grouped.keys())
+
+    if len(video_ids) < n_folds:
+        raise ValueError("Not enough video groups to build folds")
+
+    video_groups = []
+    for video_id in video_ids:
+        video_rows = grouped[video_id]
+        video_groups.append(
+            {
+                "video_id": video_id,
+                "rows": video_rows,
+                "sample_count": len(video_rows),
+            }
+        )
+
+    rng = random.Random(seed)
+    rng.shuffle(video_groups)
+    video_groups = sorted(video_groups, key=group_sample_count, reverse=True)
+
+    folds = []
+    for fold_index in range(n_folds):
+        folds.append(
+            {
+                "fold_index": fold_index,
+                "video_ids": [],
+                "rows": [],
+                "sample_count": 0,
+            }
+        )
+
+    for group_info in video_groups:
+        target_fold = choose_fold_with_smallest_sample_count(folds)
+        target_fold["video_ids"].append(group_info["video_id"])
+        target_fold["rows"].extend(group_info["rows"])
+        target_fold["sample_count"] += group_info["sample_count"]
+
+    for fold in folds:
+        fold["video_ids"] = sort_video_id_list(fold["video_ids"])
+
+    return folds
+
 # 这一组字段，是我们写 csv 时统一使用的表头顺序
 # 为什么要专门写一个常量？
 # 因为这样所有 manifest 的列顺序都会一致，后面读起来更稳定
@@ -875,10 +923,12 @@ def main():
     # 先单独生成一次 normal_future_holdout.csv
     # 注意这里 defect_val_video_ids 传空列表，
     # 因为我们这一步只是想先把“未来 holdout 的 normal 视频”挑出来
-    _, _, normal_future_holdout_rows = split_normal_rows_for_fold(
-        normal_rows=normal_rows,
-        defect_val_video_ids=[],
-        future_holdout_video_ids=future_holdout_video_ids,
+    future_holdout_video_id_set = set(str(video_id).strip() for video_id in future_holdout_video_ids)
+    normal_future_holdout_rows = sort_rows_for_manifest(
+        [row for row in normal_rows if str(row["video_id"]).strip() in future_holdout_video_id_set]
+    )
+    normal_trainable_rows = sort_rows_for_manifest(
+        [row for row in normal_rows if str(row["video_id"]).strip() not in future_holdout_video_id_set]
     )
 
     write_manifest_csv(
@@ -893,6 +943,7 @@ def main():
     seed = 42
 
     folds = build_defect_folds_by_video(defect_rows, n_folds=n_folds, seed=seed)
+    normal_folds = build_rows_by_video_folds(normal_trainable_rows, n_folds=n_folds, seed=seed + 1000)
 
     # ---------------------------
     # 第 7 步：为每一折生成 train / val 清单
@@ -906,6 +957,7 @@ def main():
         "normal_pool_count": len(normal_rows),
         "normal_future_holdout_count": len(normal_future_holdout_rows),
         "future_holdout_video_ids": future_holdout_video_ids,
+        "normal_fold_seed": seed + 1000,
         "folds": [],
     }
 
@@ -917,10 +969,9 @@ def main():
         )
 
         # 再根据“当前这一折的 defect_val_video_ids”去切 normal
-        normal_train_rows, normal_val_rows, _ = split_normal_rows_for_fold(
-            normal_rows=normal_rows,
-            defect_val_video_ids=defect_val_video_ids,
-            future_holdout_video_ids=future_holdout_video_ids,
+        normal_train_rows, normal_val_rows, normal_train_video_ids, normal_val_video_ids = build_train_val_rows_for_fold(
+            folds=normal_folds,
+            val_fold_index=fold_index,
         )
 
         # 写出当前 fold 的 defect manifest
@@ -952,6 +1003,8 @@ def main():
             "normal_val_count": len(normal_val_rows),
             "defect_train_video_ids": defect_train_video_ids,
             "defect_val_video_ids": defect_val_video_ids,
+            "normal_train_video_ids": normal_train_video_ids,
+            "normal_val_video_ids": normal_val_video_ids,
         }
 
         summary["folds"].append(fold_summary)

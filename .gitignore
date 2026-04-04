@@ -4,3 +4,5 @@ ResNET34U_NET_Codex_最终修改建议.md
 manifests
 __pycache__/
 *.py[cod]
+wandb/
+.wandb/

@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 import random
@@ -16,9 +17,16 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.datasets import ROIDataset, build_stage2_eval_transform, build_stage2_train_transform
 from src.losses import BCEDiceLoss
 from src.metrics import compare_stage2_results
+from src.mining import (
+    build_hard_normal_pool,
+    resolve_hard_normal_count,
+    sample_rows_with_frame_gap,
+    save_stage2_hard_normal_outputs,
+)
 from src.model import build_model
 from src.trainer import EarlyStopper, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
+from src.wandb_utils import finish_wandb_run, init_wandb_run, log_wandb_metrics, update_wandb_summary
 
 
 def parse_args():
@@ -77,39 +85,102 @@ def build_scaler(cfg, device):
     return torch.amp.GradScaler(device="cuda", enabled=True)
 
 
-def sample_normal_rows(normal_rows, k, seed):
-    normal_rows = list(normal_rows)
-    if k <= 0 or len(normal_rows) == 0:
-        return []
-
-    rng = random.Random(seed)
-
-    if k >= len(normal_rows):
-        sampled_rows = normal_rows[:]
-        rng.shuffle(sampled_rows)
-        return sampled_rows
-
-    return rng.sample(normal_rows, k)
+def sample_normal_rows(normal_rows, k, seed, frame_min_gap=0):
+    return sample_rows_with_frame_gap(
+        normal_rows,
+        k=k,
+        seed=seed,
+        min_frame_gap=int(frame_min_gap),
+    )
 
 
-def build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed, cfg):
+def count_rows_by_video(rows):
+    counter = {}
+    for row in rows:
+        video_id = str(row.get("video_id", "")).strip()
+        if video_id == "":
+            continue
+        counter[video_id] = counter.get(video_id, 0) + 1
+    return dict(sorted(counter.items(), key=lambda item: item[0]))
+
+
+def should_refresh_hard_normal(epoch, cfg):
+    if not bool(cfg.get("use_hard_normal_replay", False)):
+        return False
+
+    if float(cfg.get("stage2_hard_normal_ratio", 0.0)) <= 0.0 and float(cfg.get("hard_normal_k_factor", 0.0)) <= 0.0:
+        return False
+
+    warmup_epochs = int(cfg.get("hard_normal_warmup_epochs", 2))
+    refresh_every = max(1, int(cfg.get("hard_normal_refresh_every", 2)))
+
+    if int(epoch) < warmup_epochs:
+        return False
+
+    return (int(epoch) - warmup_epochs) % refresh_every == 0
+
+
+def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_rows, epoch_seed, cfg):
     defect_train_rows = list(defect_train_rows)
     normal_train_rows = list(normal_train_rows)
+    hard_normal_rows = list(hard_normal_rows)
 
     random_normal_k_factor = float(cfg.get("random_normal_k_factor", 1.0))
-    target_normal_count = int(round(len(defect_train_rows) * random_normal_k_factor))
+    target_random_normal_count = int(round(len(defect_train_rows) * random_normal_k_factor))
+    frame_min_gap = int(cfg.get("frame_min_gap", 0))
 
     sampled_normal_rows = sample_normal_rows(
         normal_rows=normal_train_rows,
-        k=target_normal_count,
+        k=target_random_normal_count,
         seed=epoch_seed,
+        frame_min_gap=frame_min_gap,
     )
 
-    epoch_rows = defect_train_rows + sampled_normal_rows
+    if bool(cfg.get("use_hard_normal_replay", False)):
+        target_hard_normal_count = resolve_hard_normal_count(
+            defect_count=len(defect_train_rows),
+            random_normal_count=target_random_normal_count,
+            cfg=cfg,
+        )
+    else:
+        target_hard_normal_count = 0
+    sampled_hard_normal_rows = sample_rows_with_frame_gap(
+        hard_normal_rows,
+        k=target_hard_normal_count,
+        seed=epoch_seed + 97,
+        min_frame_gap=frame_min_gap,
+        score_key="hard_score",
+        descending=True,
+    )
+    random_normal_keys = {
+        (
+            str(row.get("sample_id", "")).strip(),
+            str(row.get("image_name", "")).strip(),
+            str(row.get("image_path", "")).strip(),
+        )
+        for row in sampled_normal_rows
+    }
+    sampled_hard_normal_rows = [
+        row
+        for row in sampled_hard_normal_rows
+        if (
+            str(row.get("sample_id", "")).strip(),
+            str(row.get("image_name", "")).strip(),
+            str(row.get("image_path", "")).strip(),
+        )
+        not in random_normal_keys
+    ]
+
+    epoch_rows = defect_train_rows + sampled_normal_rows + sampled_hard_normal_rows
 
     rng = random.Random(epoch_seed)
     rng.shuffle(epoch_rows)
-    return epoch_rows
+    return epoch_rows, {
+        "random_normal_count": len(sampled_normal_rows),
+        "hard_normal_count": len(sampled_hard_normal_rows),
+        "hard_pool_size": len(hard_normal_rows),
+        "train_video_counts": count_rows_by_video(epoch_rows),
+    }
 
 
 def build_stage2_train_loader(rows, cfg, device):
@@ -212,6 +283,10 @@ def save_history_csv(path, history_rows):
         "threshold",
         "min_area",
         "stage2_score",
+        "random_normal_count",
+        "hard_normal_count",
+        "hard_pool_size",
+        "train_video_counts_json",
         "lr_encoder",
         "lr_decoder",
     ]
@@ -270,9 +345,12 @@ def main():
     best_ckpt_path = save_dir / "best_stage2.pt"
     last_ckpt_path = save_dir / "last_stage2.pt"
     history_path = save_dir / "history.csv"
+    wandb_run = init_wandb_run(cfg, stage_name="stage2", fold=fold, save_dir=save_dir)
 
     history_rows = []
     best_stage2_result = None
+    hard_normal_rows = []
+    hard_normal_summary = {"pool_size": 0, "count_by_video": {}, "top_score": 0.0}
 
     print(f"fold = {fold}")
     print(f"device = {device}")
@@ -283,123 +361,194 @@ def main():
     print(f"normal_val_count = {len(normal_val_rows)}")
     print(f"save_dir = {save_dir}")
 
-    for epoch_index in range(epochs):
-        epoch = epoch_index + 1
-        epoch_seed = int(cfg.get("seed", 42)) + epoch
+    try:
+        for epoch_index in range(epochs):
+            epoch = epoch_index + 1
+            epoch_seed = int(cfg.get("seed", 42)) + epoch
 
-        epoch_train_rows = build_epoch_train_rows(defect_train_rows, normal_train_rows, epoch_seed, cfg)
-        train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device)
+            epoch_train_rows, epoch_sampling_summary = build_epoch_train_rows(
+                defect_train_rows,
+                normal_train_rows,
+                hard_normal_rows,
+                epoch_seed,
+                cfg,
+            )
+            train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device)
 
-        train_stats = train_one_epoch(
-            model,
-            train_loader,
-            criterion,
-            optimizer,
-            scaler,
-            device,
-            progress_desc=f"Train {epoch}/{epochs}",
-        )
+            train_stats = train_one_epoch(
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                scaler,
+                device,
+                progress_desc=f"Train {epoch}/{epochs}",
+            )
 
-        val_stats = validate_stage2(
-            model=model,
-            loader=val_loader,
-            device=device,
-            threshold_values=threshold_grid,
-            min_area_values=min_area_grid,
-            target_normal_fpr=target_normal_fpr,
-            lambda_fpr_penalty=lambda_fpr_penalty,
-            progress_desc=f"Val {epoch}/{epochs}",
-        )
+            val_stats = validate_stage2(
+                model=model,
+                loader=val_loader,
+                device=device,
+                threshold_values=threshold_grid,
+                min_area_values=min_area_grid,
+                target_normal_fpr=target_normal_fpr,
+                lambda_fpr_penalty=lambda_fpr_penalty,
+                progress_desc=f"Val {epoch}/{epochs}",
+            )
 
-        stage2_score = float(val_stats["stage2_score"])
-        scheduler.step(stage2_score)
-        should_stop, _ = early_stopper.step(stage2_score)
+            stage2_score = float(val_stats["stage2_score"])
+            scheduler.step(stage2_score)
+            should_stop, _ = early_stopper.step(stage2_score)
 
-        current_is_best = compare_stage2_results(
-            val_stats,
-            best_stage2_result,
-            target_normal_fpr=target_normal_fpr,
-        )
+            current_is_best = compare_stage2_results(
+                val_stats,
+                best_stage2_result,
+                target_normal_fpr=target_normal_fpr,
+            )
 
-        if current_is_best:
-            best_stage2_result = {
-                "defect_dice": float(val_stats["defect_dice"]),
-                "defect_iou": float(val_stats["defect_iou"]),
-                "defect_image_recall": float(val_stats["defect_image_recall"]),
-                "normal_fpr": float(val_stats["normal_fpr"]),
-                "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
-                "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
-                "threshold": float(val_stats["threshold"]),
-                "min_area": int(val_stats["min_area"]),
-                "stage2_score": float(val_stats["stage2_score"]),
-            }
+            if current_is_best:
+                best_stage2_result = {
+                    "defect_dice": float(val_stats["defect_dice"]),
+                    "defect_iou": float(val_stats["defect_iou"]),
+                    "defect_image_recall": float(val_stats["defect_image_recall"]),
+                    "normal_fpr": float(val_stats["normal_fpr"]),
+                    "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
+                    "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
+                    "threshold": float(val_stats["threshold"]),
+                    "min_area": int(val_stats["min_area"]),
+                    "stage2_score": float(val_stats["stage2_score"]),
+                    "hard_normal_summary": hard_normal_summary,
+                }
 
-        history_rows.append(
-            {
+            history_rows.append(
+                {
+                    "epoch": epoch,
+                    "train_loss": train_stats["loss"],
+                    "defect_dice": val_stats["defect_dice"],
+                    "defect_iou": val_stats["defect_iou"],
+                    "defect_image_recall": val_stats["defect_image_recall"],
+                    "normal_fpr": val_stats["normal_fpr"],
+                    "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
+                    "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
+                    "threshold": val_stats["threshold"],
+                    "min_area": val_stats["min_area"],
+                    "stage2_score": val_stats["stage2_score"],
+                    "random_normal_count": epoch_sampling_summary["random_normal_count"],
+                    "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
+                    "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
+                    "train_video_counts_json": json.dumps(epoch_sampling_summary["train_video_counts"], ensure_ascii=False, sort_keys=True),
+                    "lr_encoder": train_stats["lr_encoder"],
+                    "lr_decoder": train_stats["lr_decoder"],
+                }
+            )
+            save_history_csv(history_path, history_rows)
+
+            checkpoint = {
                 "epoch": epoch,
-                "train_loss": train_stats["loss"],
-                "defect_dice": val_stats["defect_dice"],
-                "defect_iou": val_stats["defect_iou"],
-                "defect_image_recall": val_stats["defect_image_recall"],
-                "normal_fpr": val_stats["normal_fpr"],
-                "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
-                "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
-                "threshold": val_stats["threshold"],
-                "min_area": val_stats["min_area"],
-                "stage2_score": val_stats["stage2_score"],
-                "lr_encoder": train_stats["lr_encoder"],
-                "lr_decoder": train_stats["lr_decoder"],
+                "fold": fold,
+                "config": cfg,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "early_stopper_state_dict": early_stopper.state_dict(),
+                "best_stage2_result": best_stage2_result,
+                "hard_normal_summary": hard_normal_summary,
+                "current_val_stats": {
+                    "defect_dice": float(val_stats["defect_dice"]),
+                    "defect_iou": float(val_stats["defect_iou"]),
+                    "defect_image_recall": float(val_stats["defect_image_recall"]),
+                    "normal_fpr": float(val_stats["normal_fpr"]),
+                    "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
+                    "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
+                    "threshold": float(val_stats["threshold"]),
+                    "min_area": int(val_stats["min_area"]),
+                    "stage2_score": float(val_stats["stage2_score"]),
+                },
             }
-        )
-        save_history_csv(history_path, history_rows)
 
-        checkpoint = {
-            "epoch": epoch,
-            "fold": fold,
-            "config": cfg,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict(),
-            "early_stopper_state_dict": early_stopper.state_dict(),
-            "best_stage2_result": best_stage2_result,
-            "current_val_stats": {
-                "defect_dice": float(val_stats["defect_dice"]),
-                "defect_iou": float(val_stats["defect_iou"]),
-                "defect_image_recall": float(val_stats["defect_image_recall"]),
-                "normal_fpr": float(val_stats["normal_fpr"]),
-                "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
-                "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
-                "threshold": float(val_stats["threshold"]),
-                "min_area": int(val_stats["min_area"]),
-                "stage2_score": float(val_stats["stage2_score"]),
+            if scaler is not None:
+                checkpoint["scaler_state_dict"] = scaler.state_dict()
+
+            save_checkpoint(last_ckpt_path, checkpoint)
+
+            if current_is_best:
+                save_checkpoint(best_ckpt_path, checkpoint)
+
+            if should_refresh_hard_normal(epoch, cfg):
+                hard_normal_rows, hard_normal_summary = build_hard_normal_pool(
+                    model=model,
+                    normal_rows=normal_train_rows,
+                    cfg=cfg,
+                    device=device,
+                    source_epoch=epoch,
+                    threshold=float(val_stats["threshold"]),
+                    min_area=int(val_stats["min_area"]),
+                    defect_count=len(defect_train_rows),
+                    random_normal_count=epoch_sampling_summary["random_normal_count"],
+                )
+                save_stage2_hard_normal_outputs(save_dir, epoch, hard_normal_rows, hard_normal_summary)
+            else:
+                hard_normal_summary = {
+                    **hard_normal_summary,
+                    "pool_size": len(hard_normal_rows),
+                }
+
+            wandb_payload = {
+                "epoch": epoch,
+                "stage2/train_loss": float(train_stats["loss"]),
+                "stage2/defect_dice": float(val_stats["defect_dice"]),
+                "stage2/defect_iou": float(val_stats["defect_iou"]),
+                "stage2/defect_image_recall": float(val_stats["defect_image_recall"]),
+                "stage2/normal_fpr": float(val_stats["normal_fpr"]),
+                "stage2/normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
+                "stage2/normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
+                "stage2/threshold": float(val_stats["threshold"]),
+                "stage2/min_area": int(val_stats["min_area"]),
+                "stage2/stage2_score": float(stage2_score),
+                "stage2/random_normal_count": int(epoch_sampling_summary["random_normal_count"]),
+                "stage2/hard_normal_count": int(epoch_sampling_summary["hard_normal_count"]),
+                "stage2/hard_pool_size": int(epoch_sampling_summary["hard_pool_size"]),
+                "stage2/lr_encoder": float(train_stats["lr_encoder"]),
+                "stage2/lr_decoder": float(train_stats["lr_decoder"]),
+            }
+            for video_id, count in epoch_sampling_summary["train_video_counts"].items():
+                wandb_payload[f"stage2/train_video_count/{video_id}"] = int(count)
+            for video_id, count in hard_normal_summary.get("count_by_video", {}).items():
+                wandb_payload[f"stage2/hard_pool_video_count/{video_id}"] = int(count)
+            if "top_score" in hard_normal_summary:
+                wandb_payload["stage2/hard_pool_top_score"] = float(hard_normal_summary["top_score"])
+            log_wandb_metrics(wandb_run, wandb_payload, step=epoch)
+
+            print(
+                f"epoch {epoch}/{epochs} | "
+                f"random_normal={epoch_sampling_summary['random_normal_count']} | "
+                f"hard_normal={epoch_sampling_summary['hard_normal_count']} | "
+                f"hard_pool={epoch_sampling_summary['hard_pool_size']} | "
+                f"train_loss={train_stats['loss']:.6f} | "
+                f"defect_dice={val_stats['defect_dice']:.6f} | "
+                f"defect_iou={val_stats['defect_iou']:.6f} | "
+                f"defect_recall={val_stats['defect_image_recall']:.6f} | "
+                f"normal_fpr={val_stats['normal_fpr']:.6f} | "
+                f"thr={val_stats['threshold']:.2f} | "
+                f"min_area={val_stats['min_area']} | "
+                f"stage2_score={val_stats['stage2_score']:.6f} | "
+                f"lr_encoder={train_stats['lr_encoder']:.6e} | "
+                f"lr_decoder={train_stats['lr_decoder']:.6e}"
+            )
+
+            if should_stop:
+                print("early stopping triggered, stage2 stopped early.")
+                break
+    finally:
+        update_wandb_summary(
+            wandb_run,
+            {
+                "stage2/best": best_stage2_result or {},
+                "stage2/final_hard_normal_summary": hard_normal_summary,
+                "stage2/history_rows": len(history_rows),
             },
-        }
-
-        if scaler is not None:
-            checkpoint["scaler_state_dict"] = scaler.state_dict()
-
-        save_checkpoint(last_ckpt_path, checkpoint)
-
-        if current_is_best:
-            save_checkpoint(best_ckpt_path, checkpoint)
-
-        print(
-            f"epoch {epoch}/{epochs} | "
-            f"train_loss={train_stats['loss']:.6f} | "
-            f"defect_dice={val_stats['defect_dice']:.6f} | "
-            f"defect_iou={val_stats['defect_iou']:.6f} | "
-            f"defect_recall={val_stats['defect_image_recall']:.6f} | "
-            f"normal_fpr={val_stats['normal_fpr']:.6f} | "
-            f"thr={val_stats['threshold']:.2f} | "
-            f"min_area={val_stats['min_area']} | "
-            f"stage2_score={val_stats['stage2_score']:.6f} | "
-            f"lr_encoder={train_stats['lr_encoder']:.6e} | "
-            f"lr_decoder={train_stats['lr_decoder']:.6e}"
         )
-
-        if should_stop:
-            print("early stopping triggered, stage2 stopped early.")
-            break
+        finish_wandb_run(wandb_run)
 
     print("stage2 training finished.")
 

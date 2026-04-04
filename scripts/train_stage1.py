@@ -1,7 +1,7 @@
 import argparse
 import json
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import torch
@@ -16,9 +16,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.datasets import PatchDataset, build_stage1_eval_transform, build_stage1_train_transform
 from src.losses import BCEDiceLoss
+from src.mining import build_stage1_replay_rows, save_stage1_replay_outputs
 from src.model import build_model
 from src.trainer import EarlyStopper, build_optimizer, build_scheduler, save_checkpoint, train_one_epoch, validate_stage1
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
+from src.wandb_utils import finish_wandb_run, init_wandb_run, log_wandb_metrics, update_wandb_summary
 
 
 def parse_args():
@@ -79,6 +81,62 @@ def infer_patch_family(row):
     return "unknown"
 
 
+def _to_int_or_none(value):
+    try:
+        text = str(value).strip()
+        if text == "":
+            return None
+        return int(text)
+    except Exception:
+        return None
+
+
+def count_patch_families(rows):
+    counter = Counter()
+    for row in rows:
+        counter[infer_patch_family(row)] += 1
+    return dict(sorted(counter.items(), key=lambda item: item[0]))
+
+
+def build_temporal_density_by_row(rows, min_frame_gap):
+    densities = [1 for _ in rows]
+    min_frame_gap = int(min_frame_gap)
+
+    if min_frame_gap <= 0:
+        return densities
+
+    grouped = defaultdict(list)
+    for index, row in enumerate(rows):
+        video_id = str(row.get("video_id", "")).strip()
+        frame_id = _to_int_or_none(row.get("frame_id", ""))
+        family = infer_patch_family(row)
+
+        if video_id == "" or frame_id is None:
+            continue
+
+        grouped[(video_id, family)].append((frame_id, index))
+
+    for items in grouped.values():
+        items.sort(key=lambda item: item[0])
+
+        for current_pos, (frame_id, row_index) in enumerate(items):
+            density = 1
+
+            left_pos = current_pos - 1
+            while left_pos >= 0 and abs(frame_id - items[left_pos][0]) <= min_frame_gap:
+                density += 1
+                left_pos -= 1
+
+            right_pos = current_pos + 1
+            while right_pos < len(items) and abs(items[right_pos][0] - frame_id) <= min_frame_gap:
+                density += 1
+                right_pos += 1
+
+            densities[row_index] = density
+
+    return densities
+
+
 def build_stage1_sampler(train_rows, cfg, generator):
     sampler_mode = str(cfg.get("stage1_sampler_mode", "shuffle")).strip().lower()
     if sampler_mode != "balanced":
@@ -94,10 +152,12 @@ def build_stage1_sampler(train_rows, cfg, generator):
     family_counts = Counter(infer_patch_family(row) for row in train_rows)
     video_counts = Counter(str(row.get("video_id", "")).strip() or "__missing__" for row in train_rows)
     use_video_inverse_freq = bool(cfg.get("stage1_use_video_inverse_freq", True))
+    use_frame_inverse_density = bool(cfg.get("stage1_use_frame_inverse_density", False))
+    temporal_densities = build_temporal_density_by_row(train_rows, int(cfg.get("stage1_frame_min_gap", 0)))
 
     weights = []
 
-    for row in train_rows:
+    for row_index, row in enumerate(train_rows):
         family = infer_patch_family(row)
         video_id = str(row.get("video_id", "")).strip() or "__missing__"
 
@@ -105,12 +165,18 @@ def build_stage1_sampler(train_rows, cfg, generator):
         family_ratio = desired_ratios.get(family, 0.0)
 
         if family_ratio <= 0.0:
+            if family == "replay":
+                weights.append(0.0)
+                continue
             family_ratio = 1.0 / max(1, len(train_rows))
 
         weight = family_ratio / family_count
 
         if use_video_inverse_freq:
             weight *= 1.0 / max(1, video_counts[video_id])
+
+        if use_frame_inverse_density:
+            weight *= 1.0 / max(1, temporal_densities[row_index])
 
         weights.append(weight)
 
@@ -122,10 +188,7 @@ def build_stage1_sampler(train_rows, cfg, generator):
     )
 
 
-def build_stage1_loaders(cfg, device):
-    train_rows = read_csv_rows(resolve_path(cfg["train_index_path"]))
-    val_rows = read_csv_rows(resolve_path(cfg["val_index_path"]))
-
+def build_stage1_loaders_from_rows(train_rows, val_rows, cfg, device):
     patch_out_size = int(cfg.get("patch_out_size", 384))
     batch_size = int(cfg.get("batch_size", 16))
     num_workers = int(cfg.get("num_workers", 8))
@@ -174,6 +237,12 @@ def build_stage1_loaders(cfg, device):
     return train_loader, val_loader, len(train_rows), len(val_rows)
 
 
+def build_stage1_loaders(cfg, device):
+    train_rows = read_csv_rows(resolve_path(cfg["train_index_path"]))
+    val_rows = read_csv_rows(resolve_path(cfg["val_index_path"]))
+    return build_stage1_loaders_from_rows(train_rows, val_rows, cfg, device)
+
+
 def build_scaler(cfg, device):
     amp_enabled = bool(cfg.get("amp", True))
     use_amp = amp_enabled and device.type == "cuda"
@@ -195,6 +264,9 @@ def save_history_csv(path, history_rows):
         "positive_patch_recall",
         "negative_patch_fpr",
         "stage1_score",
+        "train_patch_count",
+        "replay_patch_count",
+        "train_family_counts_json",
         "patch_dice_by_type_json",
         "count_by_type_json",
         "lr_encoder",
@@ -226,6 +298,22 @@ def stage1_result_is_better(current_result, best_result):
     return False
 
 
+def should_refresh_stage1_replay(epoch, cfg):
+    if not bool(cfg.get("stage1_use_replay", False)):
+        return False
+
+    if float(cfg.get("stage1_replay_ratio", 0.0)) <= 0.0:
+        return False
+
+    warmup_epochs = int(cfg.get("stage1_replay_warmup_epochs", 3))
+    refresh_every = max(1, int(cfg.get("stage1_replay_refresh_every", 3)))
+
+    if int(epoch) < warmup_epochs:
+        return False
+
+    return (int(epoch) - warmup_epochs) % refresh_every == 0
+
+
 def main():
     args = parse_args()
 
@@ -236,7 +324,14 @@ def main():
     set_seed(int(cfg.get("seed", 42)))
 
     device = build_device(cfg)
-    train_loader, val_loader, train_patch_count, val_patch_count = build_stage1_loaders(cfg, device)
+    base_train_rows = read_csv_rows(resolve_path(cfg["train_index_path"]))
+    val_rows = read_csv_rows(resolve_path(cfg["val_index_path"]))
+    train_loader, val_loader, train_patch_count, val_patch_count = build_stage1_loaders_from_rows(
+        base_train_rows,
+        val_rows,
+        cfg,
+        device,
+    )
 
     model = build_model(pretrained=bool(cfg.get("pretrained", True)))
     model.to(device)
@@ -267,116 +362,187 @@ def main():
     best_ckpt_path = save_dir / "best_stage1.pt"
     last_ckpt_path = save_dir / "last_stage1.pt"
     history_path = save_dir / "history.csv"
+    wandb_run = init_wandb_run(cfg, stage_name="stage1", fold=fold, save_dir=save_dir)
 
     history_rows = []
     best_stage1_result = None
+    replay_rows = []
+    replay_summary = {"total_count": 0, "count_by_type": {}, "count_by_source_family": {}}
 
     print(f"fold = {fold}")
     print(f"device = {device}")
-    print(f"train_patch_count = {train_patch_count}")
+    print(f"base_train_patch_count = {len(base_train_rows)}")
     print(f"val_patch_count = {val_patch_count}")
     print(f"save_dir = {save_dir}")
 
-    for epoch_index in range(epochs):
-        epoch = epoch_index + 1
-        encoder_trainable = epoch_index >= freeze_encoder_epochs
-        model.set_encoder_trainable(encoder_trainable)
+    try:
+        for epoch_index in range(epochs):
+            epoch = epoch_index + 1
+            encoder_trainable = epoch_index >= freeze_encoder_epochs
+            model.set_encoder_trainable(encoder_trainable)
 
-        train_stats = train_one_epoch(
-            model,
-            train_loader,
-            criterion,
-            optimizer,
-            scaler,
-            device,
-            progress_desc=f"Train {epoch}/{epochs}",
-        )
-        val_stats = validate_stage1(
-            model,
-            val_loader,
-            criterion,
-            device,
-            threshold=eval_threshold,
-            progress_desc=f"Val {epoch}/{epochs}",
-        )
+            current_train_rows = list(base_train_rows)
+            if len(replay_rows) > 0:
+                current_train_rows.extend(replay_rows)
 
-        stage1_score = float(val_stats["patch_dice_pos_only"])
-        scheduler.step(stage1_score)
-        should_stop, _ = early_stopper.step(stage1_score)
+            train_loader, val_loader, train_patch_count, val_patch_count = build_stage1_loaders_from_rows(
+                current_train_rows,
+                val_rows,
+                cfg,
+                device,
+            )
+            train_family_counts = count_patch_families(current_train_rows)
 
-        current_is_best = stage1_result_is_better(val_stats, best_stage1_result)
-        if current_is_best:
-            best_stage1_result = {
-                "patch_dice_all": float(val_stats["patch_dice_all"]),
-                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
-                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
-                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
-                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
-                "count_by_type": dict(val_stats["count_by_type"]),
-            }
+            train_stats = train_one_epoch(
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                scaler,
+                device,
+                progress_desc=f"Train {epoch}/{epochs}",
+            )
+            val_stats = validate_stage1(
+                model,
+                val_loader,
+                criterion,
+                device,
+                threshold=eval_threshold,
+                progress_desc=f"Val {epoch}/{epochs}",
+            )
 
-        history_rows.append(
-            {
+            stage1_score = float(val_stats["patch_dice_pos_only"])
+            scheduler.step(stage1_score)
+            should_stop, _ = early_stopper.step(stage1_score)
+
+            current_is_best = stage1_result_is_better(val_stats, best_stage1_result)
+            if current_is_best:
+                best_stage1_result = {
+                    "patch_dice_all": float(val_stats["patch_dice_all"]),
+                    "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+                    "positive_patch_recall": float(val_stats["positive_patch_recall"]),
+                    "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+                    "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
+                    "count_by_type": dict(val_stats["count_by_type"]),
+                    "replay_summary": replay_summary,
+                }
+
+            history_rows.append(
+                {
+                    "epoch": epoch,
+                    "encoder_frozen": not encoder_trainable,
+                    "train_loss": train_stats["loss"],
+                    "val_loss": val_stats["val_loss"],
+                    "patch_dice_all": val_stats["patch_dice_all"],
+                    "patch_dice_pos_only": val_stats["patch_dice_pos_only"],
+                    "positive_patch_recall": val_stats["positive_patch_recall"],
+                    "negative_patch_fpr": val_stats["negative_patch_fpr"],
+                    "stage1_score": stage1_score,
+                    "train_patch_count": train_patch_count,
+                    "replay_patch_count": len(replay_rows),
+                    "train_family_counts_json": json.dumps(train_family_counts, ensure_ascii=False, sort_keys=True),
+                    "patch_dice_by_type_json": json.dumps(val_stats["patch_dice_by_type"], ensure_ascii=False, sort_keys=True),
+                    "count_by_type_json": json.dumps(val_stats["count_by_type"], ensure_ascii=False, sort_keys=True),
+                    "lr_encoder": train_stats["lr_encoder"],
+                    "lr_decoder": train_stats["lr_decoder"],
+                }
+            )
+            save_history_csv(history_path, history_rows)
+
+            checkpoint = {
                 "epoch": epoch,
-                "encoder_frozen": not encoder_trainable,
-                "train_loss": train_stats["loss"],
-                "val_loss": val_stats["val_loss"],
-                "patch_dice_all": val_stats["patch_dice_all"],
-                "patch_dice_pos_only": val_stats["patch_dice_pos_only"],
-                "positive_patch_recall": val_stats["positive_patch_recall"],
-                "negative_patch_fpr": val_stats["negative_patch_fpr"],
-                "stage1_score": stage1_score,
-                "patch_dice_by_type_json": json.dumps(val_stats["patch_dice_by_type"], ensure_ascii=False, sort_keys=True),
-                "count_by_type_json": json.dumps(val_stats["count_by_type"], ensure_ascii=False, sort_keys=True),
-                "lr_encoder": train_stats["lr_encoder"],
-                "lr_decoder": train_stats["lr_decoder"],
+                "fold": fold,
+                "config": cfg,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
+                "early_stopper_state_dict": early_stopper.state_dict(),
+                "best_stage1_result": best_stage1_result,
+                "replay_summary": replay_summary,
+                "current_val_stats": {
+                    "patch_dice_all": float(val_stats["patch_dice_all"]),
+                    "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+                    "positive_patch_recall": float(val_stats["positive_patch_recall"]),
+                    "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+                    "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
+                    "count_by_type": dict(val_stats["count_by_type"]),
+                },
             }
-        )
-        save_history_csv(history_path, history_rows)
 
-        checkpoint = {
-            "epoch": epoch,
-            "fold": fold,
-            "config": cfg,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict(),
-            "early_stopper_state_dict": early_stopper.state_dict(),
-            "best_stage1_result": best_stage1_result,
-            "current_val_stats": {
-                "patch_dice_all": float(val_stats["patch_dice_all"]),
-                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
-                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
-                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
-                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
-                "count_by_type": dict(val_stats["count_by_type"]),
+            if scaler is not None:
+                checkpoint["scaler_state_dict"] = scaler.state_dict()
+
+            save_checkpoint(last_ckpt_path, checkpoint)
+
+            if current_is_best:
+                save_checkpoint(best_ckpt_path, checkpoint)
+
+            if should_refresh_stage1_replay(epoch, cfg):
+                replay_rows, replay_summary = build_stage1_replay_rows(
+                    model=model,
+                    base_patch_rows=base_train_rows,
+                    cfg=cfg,
+                    device=device,
+                    source_epoch=epoch,
+                )
+                save_stage1_replay_outputs(save_dir, epoch, replay_rows, replay_summary)
+            else:
+                replay_summary = {
+                    **replay_summary,
+                    "source_epoch": replay_summary.get("source_epoch", ""),
+                    "total_count": len(replay_rows),
+                }
+
+            wandb_payload = {
+                "epoch": epoch,
+                "stage1/train_loss": float(train_stats["loss"]),
+                "stage1/val_loss": float(val_stats["val_loss"]),
+                "stage1/patch_dice_all": float(val_stats["patch_dice_all"]),
+                "stage1/patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+                "stage1/positive_patch_recall": float(val_stats["positive_patch_recall"]),
+                "stage1/negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+                "stage1/stage1_score": float(stage1_score),
+                "stage1/train_patch_count": int(train_patch_count),
+                "stage1/replay_patch_count": int(len(replay_rows)),
+                "stage1/lr_encoder": float(train_stats["lr_encoder"]),
+                "stage1/lr_decoder": float(train_stats["lr_decoder"]),
+            }
+            for family_name, count in train_family_counts.items():
+                wandb_payload[f"stage1/train_family/{family_name}"] = int(count)
+            for patch_type, dice_value in val_stats["patch_dice_by_type"].items():
+                wandb_payload[f"stage1/patch_dice_by_type/{patch_type}"] = float(dice_value)
+            for replay_type, count in replay_summary.get("count_by_type", {}).items():
+                wandb_payload[f"stage1/replay_type/{replay_type}"] = int(count)
+            log_wandb_metrics(wandb_run, wandb_payload, step=epoch)
+
+            print(
+                f"epoch {epoch}/{epochs} | "
+                f"encoder_frozen={not encoder_trainable} | "
+                f"train_patches={train_patch_count} | "
+                f"replay_patches={len(replay_rows)} | "
+                f"train_loss={train_stats['loss']:.6f} | "
+                f"val_loss={val_stats['val_loss']:.6f} | "
+                f"patch_dice_all={val_stats['patch_dice_all']:.6f} | "
+                f"patch_dice_pos_only={val_stats['patch_dice_pos_only']:.6f} | "
+                f"positive_recall={val_stats['positive_patch_recall']:.6f} | "
+                f"negative_fpr={val_stats['negative_patch_fpr']:.6f} | "
+                f"lr_encoder={train_stats['lr_encoder']:.6e} | "
+                f"lr_decoder={train_stats['lr_decoder']:.6e}"
+            )
+
+            if should_stop:
+                print("early stopping triggered, stage1 stopped early.")
+                break
+    finally:
+        update_wandb_summary(
+            wandb_run,
+            {
+                "stage1/best": best_stage1_result or {},
+                "stage1/final_replay_summary": replay_summary,
+                "stage1/history_rows": len(history_rows),
             },
-        }
-
-        if scaler is not None:
-            checkpoint["scaler_state_dict"] = scaler.state_dict()
-
-        save_checkpoint(last_ckpt_path, checkpoint)
-
-        if current_is_best:
-            save_checkpoint(best_ckpt_path, checkpoint)
-
-        print(
-            f"epoch {epoch}/{epochs} | "
-            f"encoder_frozen={not encoder_trainable} | "
-            f"train_loss={train_stats['loss']:.6f} | "
-            f"val_loss={val_stats['val_loss']:.6f} | "
-            f"patch_dice_all={val_stats['patch_dice_all']:.6f} | "
-            f"patch_dice_pos_only={val_stats['patch_dice_pos_only']:.6f} | "
-            f"positive_recall={val_stats['positive_patch_recall']:.6f} | "
-            f"negative_fpr={val_stats['negative_patch_fpr']:.6f} | "
-            f"lr_encoder={train_stats['lr_encoder']:.6e} | "
-            f"lr_decoder={train_stats['lr_decoder']:.6e}"
         )
-
-        if should_stop:
-            print("early stopping triggered, stage1 stopped early.")
-            break
+        finish_wandb_run(wandb_run)
 
     print("stage1 training finished.")
 

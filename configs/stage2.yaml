@@ -25,6 +25,14 @@ min_lr: 1.0e-7
 num_workers: 8
 pretrained: false
 device: cuda
+wandb_enable: true
+wandb_mode: online
+wandb_project: unet-two-stage
+wandb_entity: ""
+wandb_group: baseline
+wandb_job_type: train
+wandb_run_name_template: "{stage}_fold{fold}"
+wandb_tags: ["stage2"]
 
 threshold: 0.50
 
@@ -46,6 +54,12 @@ threshold_grid_end: 0.90
 threshold_grid_step: 0.02
 min_area_grid: [0, 8, 16, 24, 32, 48]
 random_normal_k_factor: 1.0
+use_hard_normal_replay: true
+stage2_hard_normal_ratio: 0.40
+hard_normal_warmup_epochs: 2
+hard_normal_refresh_every: 2
+hard_normal_pool_factor: 3.0
+frame_min_gap: 1
 
 defect_train_manifest_template: manifests/defect_fold{fold}_train.csv
 defect_val_manifest_template: manifests/defect_fold{fold}_val.csv

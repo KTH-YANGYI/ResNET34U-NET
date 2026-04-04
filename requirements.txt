@@ -1,0 +1,9 @@
+torch
+torchvision
+numpy
+Pillow
+opencv-python
+PyYAML
+python-pptx
+tqdm
+wandb

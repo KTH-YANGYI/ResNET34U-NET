@@ -147,8 +147,8 @@
       "fold_index": 2,
       "defect_train_image_count": 61,
       "defect_val_image_count": 20,
-      "normal_train_image_count": 2352,
-      "normal_val_image_count": 980,
+      "normal_train_image_count": 2516,
+      "normal_val_image_count": 816,
       "train_seed": 1002,
       "val_seed": 2002,
       "train_patch_summary": {
@@ -198,8 +198,8 @@
       "fold_index": 3,
       "defect_train_image_count": 61,
       "defect_val_image_count": 20,
-      "normal_train_image_count": 2528,
-      "normal_val_image_count": 804,
+      "normal_train_image_count": 2499,
+      "normal_val_image_count": 833,
       "train_seed": 1003,
       "val_seed": 2003,
       "train_patch_summary": {
