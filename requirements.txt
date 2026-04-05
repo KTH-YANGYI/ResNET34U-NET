@@ -7,3 +7,4 @@ PyYAML
 python-pptx
 tqdm
 wandb
+matplotlib
