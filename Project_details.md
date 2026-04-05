@@ -23,7 +23,7 @@ The stage 2 model doesn't start from scratch, but instead enters the full-image 
 
 ## 3.Overall Pipeline 
 
-pipeline.png
+![Overall Pipeline](pipeline.png)
 
 ## 4.Dataset
 

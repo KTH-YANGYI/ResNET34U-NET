@@ -4,3 +4,9 @@ __pycache__/
 *.py[cod]
 wandb/
 .wandb/
+项目完整详细说明.md
+服务器说明.md
+readme2_en.md
+readme2_zh.md
+readme1.md
+outputs
