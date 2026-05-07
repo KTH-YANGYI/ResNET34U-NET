@@ -4,7 +4,7 @@ fold: 0
 
 image_size: 640
 samples_path: manifests/samples.csv
-batch_size: 4
+batch_size: 24
 epochs: 25
 
 encoder_lr: 2.0e-5
