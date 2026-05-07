@@ -18,7 +18,7 @@ from src.datasets import PatchDataset, build_stage1_eval_transform, build_stage1
 from src.losses import BCEDiceLoss
 from src.mining import build_stage1_replay_rows, save_stage1_replay_outputs
 from src.model import build_model
-from src.trainer import EarlyStopper, build_optimizer, build_scheduler, save_checkpoint, train_one_epoch, validate_stage1
+from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, save_checkpoint, train_one_epoch, validate_stage1
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 
 
@@ -187,7 +187,7 @@ def build_scaler(cfg, device):
     if not use_amp:
         return None
 
-    return torch.amp.GradScaler(device="cuda", enabled=True)
+    return build_amp_grad_scaler(device, enabled=True)
 
 
 def save_history_csv(path, history_rows):

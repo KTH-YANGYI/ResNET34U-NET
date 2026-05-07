@@ -1,4 +1,5 @@
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
@@ -123,6 +124,46 @@ def load_checkpoint(path, model, optimizer=None, scheduler=None, map_location="c
     return checkpoint
 
 
+def build_amp_grad_scaler(device, enabled=True):
+    enabled = bool(enabled) and device.type == "cuda"
+    if not enabled:
+        return None
+
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        try:
+            return torch.amp.GradScaler(device="cuda", enabled=True)
+        except TypeError:
+            try:
+                return torch.amp.GradScaler("cuda", enabled=True)
+            except TypeError:
+                return torch.amp.GradScaler(enabled=True)
+
+    if hasattr(torch, "cuda") and hasattr(torch.cuda, "amp") and hasattr(torch.cuda.amp, "GradScaler"):
+        return torch.cuda.amp.GradScaler(enabled=True)
+
+    return None
+
+
+def amp_autocast(device, enabled=True):
+    enabled = bool(enabled) and device.type == "cuda"
+    if not enabled:
+        return nullcontext()
+
+    if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+        try:
+            return torch.amp.autocast(device_type=device.type, enabled=True)
+        except TypeError:
+            try:
+                return torch.amp.autocast(device.type, enabled=True)
+            except TypeError:
+                pass
+
+    if hasattr(torch, "cuda") and hasattr(torch.cuda, "amp") and hasattr(torch.cuda.amp, "autocast"):
+        return torch.cuda.amp.autocast(enabled=True)
+
+    return nullcontext()
+
+
 def batch_to_device(batch, device):
     images = batch["image"].to(device, non_blocking=True)
     masks = batch["mask"].to(device, non_blocking=True)
@@ -177,7 +218,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, progres
 
             optimizer.zero_grad(set_to_none=True)
 
-            with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+            with amp_autocast(device, enabled=use_amp):
                 logits = model(images)
                 loss = criterion(logits, masks)
 

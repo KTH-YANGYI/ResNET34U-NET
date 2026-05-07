@@ -25,7 +25,7 @@ from src.mining import (
 )
 from src.model import build_model
 from src.samples import load_samples, split_samples_for_fold
-from src.trainer import EarlyStopper, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
+from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 from scripts.evaluate_val import evaluate_and_save_stage2
 
@@ -83,7 +83,7 @@ def build_scaler(cfg, device):
     if not use_amp:
         return None
 
-    return torch.amp.GradScaler(device="cuda", enabled=True)
+    return build_amp_grad_scaler(device, enabled=True)
 
 
 def sample_normal_rows(normal_rows, k, seed):
