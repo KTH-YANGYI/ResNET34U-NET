@@ -6,6 +6,7 @@ patch_out_size: 384
 batch_size: 16
 epochs: 30
 n_folds: 4
+samples_path: manifests/samples.csv
 
 encoder_lr: 5.0e-5
 decoder_lr: 2.0e-4
@@ -27,14 +28,6 @@ min_lr: 1.0e-7
 num_workers: 8
 pretrained: true
 device: cuda
-wandb_enable: true
-wandb_mode: online
-wandb_project: unet-two-stage
-wandb_entity: ""
-wandb_group: baseline
-wandb_job_type: train
-wandb_run_name_template: "{stage}_fold{fold}"
-wandb_tags: ["stage1"]
 
 use_imagenet_normalize: true
 augment_enable: true
@@ -56,9 +49,6 @@ stage1_replay_ratio: 0.15
 stage1_replay_warmup_epochs: 3
 stage1_replay_refresh_every: 3
 stage1_max_replay_ratio: 0.20
-stage1_use_video_inverse_freq: true
-stage1_use_frame_inverse_density: true
-stage1_frame_min_gap: 1
 stage1_eval_threshold: 0.50
 
 positive_center_crop_sizes: [320, 384, 448]

@@ -1,6 +1,10 @@
-import cv2
 import numpy as np
 import torch
+
+try:
+    from scipy import ndimage as scipy_ndimage
+except Exception:
+    scipy_ndimage = None
 
 
 def to_numpy_array(data):
@@ -31,22 +35,78 @@ def _to_binary_mask(mask):
     return (_squeeze_to_hw(mask) > 0).astype(np.uint8)
 
 
+def _label_components_numpy(binary_mask):
+    binary_mask = _to_binary_mask(binary_mask)
+    height, width = binary_mask.shape
+    labels = np.zeros((height, width), dtype=np.int32)
+    areas = []
+    current_label = 0
+    neighbor_offsets = [
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+    ]
+
+    start_ys, start_xs = np.where(binary_mask > 0)
+
+    for start_y, start_x in zip(start_ys, start_xs):
+        if labels[start_y, start_x] != 0:
+            continue
+
+        current_label += 1
+        stack = [(int(start_y), int(start_x))]
+        labels[start_y, start_x] = current_label
+        area = 0
+
+        while len(stack) > 0:
+            y, x = stack.pop()
+            area += 1
+
+            for dy, dx in neighbor_offsets:
+                ny = y + dy
+                nx = x + dx
+                if ny < 0 or ny >= height or nx < 0 or nx >= width:
+                    continue
+                if binary_mask[ny, nx] == 0 or labels[ny, nx] != 0:
+                    continue
+                labels[ny, nx] = current_label
+                stack.append((ny, nx))
+
+        areas.append(area)
+
+    return labels, np.asarray(areas, dtype=np.int64)
+
+
+def label_components(binary_mask):
+    binary_mask = _to_binary_mask(binary_mask)
+
+    if int(binary_mask.sum()) == 0:
+        return np.zeros_like(binary_mask, dtype=np.int32), np.asarray([], dtype=np.int64)
+
+    if scipy_ndimage is not None:
+        structure = np.ones((3, 3), dtype=np.uint8)
+        labels, component_count = scipy_ndimage.label(binary_mask, structure=structure)
+        if int(component_count) == 0:
+            return labels.astype(np.int32), np.asarray([], dtype=np.int64)
+        areas = np.bincount(labels.ravel())[1:]
+        return labels.astype(np.int32), areas.astype(np.int64)
+
+    return _label_components_numpy(binary_mask)
+
+
 def connected_component_stats(binary_mask):
     binary_mask = _to_binary_mask(binary_mask)
 
     if int(binary_mask.sum()) == 0:
         return []
 
-    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
-    results = []
-
-    for label_index in range(1, num_labels):
-        area = int(stats[label_index, cv2.CC_STAT_AREA])
-        if area <= 0:
-            continue
-        results.append({"area": area})
-
-    return results
+    _, areas = label_components(binary_mask)
+    return [{"area": int(area)} for area in areas if int(area) > 0]
 
 
 def largest_component_area(binary_mask):
@@ -66,11 +126,10 @@ def filter_small_components(binary_mask, min_area=0):
     if int(binary_mask.sum()) == 0:
         return binary_mask
 
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
+    labels, areas = label_components(binary_mask)
     filtered_mask = np.zeros_like(binary_mask, dtype=np.uint8)
 
-    for label_index in range(1, num_labels):
-        area = int(stats[label_index, cv2.CC_STAT_AREA])
+    for label_index, area in enumerate(areas, start=1):
         if area >= min_area:
             filtered_mask[labels == label_index] = 1
 

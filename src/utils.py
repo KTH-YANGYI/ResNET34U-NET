@@ -1,10 +1,15 @@
 import csv
+import ast
 import json
 import random
 from pathlib import Path
 import numpy as np
 import torch
-import yaml
+
+try:
+    import yaml
+except Exception:
+    yaml = None
 
 
 def ensure_dir(path):
@@ -92,6 +97,43 @@ def load_yaml(path):
     """
     读取 yaml 配置文件。读出来后通常会得到一个字典。
     """
+    if yaml is None:
+        data = {}
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                text = line.strip()
+                if text == "" or text.startswith("#") or ":" not in text:
+                    continue
+
+                key, raw_value = text.split(":", 1)
+                key = key.strip()
+                value = raw_value.strip()
+
+                if value == "":
+                    data[key] = ""
+                    continue
+
+                lower_value = value.lower()
+                if lower_value in {"true", "false"}:
+                    data[key] = lower_value == "true"
+                    continue
+
+                try:
+                    data[key] = ast.literal_eval(value)
+                    continue
+                except Exception:
+                    pass
+
+                try:
+                    if any(char in value for char in [".", "e", "E"]):
+                        data[key] = float(value)
+                    else:
+                        data[key] = int(value)
+                    continue
+                except Exception:
+                    data[key] = value.strip("\"'")
+
+        return data
 
     with open(path, "r", encoding="utf-8") as f:
         # yaml.safe_load 是安全读取 yaml 的常用方法

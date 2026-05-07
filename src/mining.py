@@ -46,6 +46,10 @@ STAGE2_HARD_NORMAL_FIELDNAMES = [
     "sample_type",
     "is_labeled",
     "source_split",
+    "device",
+    "defect_class",
+    "cv_fold",
+    "split",
     "video_id",
     "video_name",
     "frame_id",
@@ -379,7 +383,7 @@ def build_hard_normal_pool(
     random_normal_count,
 ):
     if len(normal_rows) == 0:
-        return [], {"pool_size": 0, "count_by_video": {}, "top_score": 0.0}
+        return [], {"pool_size": 0, "count_by_device": {}, "top_score": 0.0}
 
     batch_size = int(cfg.get("batch_size", 4))
     num_workers = int(cfg.get("num_workers", 0))
@@ -391,7 +395,7 @@ def build_hard_normal_pool(
     pool_limit = max(target_hard_count, int(math.ceil(max(1, target_hard_count) * pool_factor)))
 
     if hard_ratio <= 0.0 and target_hard_count <= 0:
-        return [], {"pool_size": 0, "count_by_video": {}, "top_score": 0.0}
+        return [], {"pool_size": 0, "count_by_device": {}, "top_score": 0.0}
 
     dataset = ROIDataset(
         normal_rows,
@@ -431,7 +435,7 @@ def build_hard_normal_pool(
         scored_rows,
         k=pool_limit,
         seed=seed,
-        min_frame_gap=int(cfg.get("frame_min_gap", 0)),
+        min_frame_gap=0,
         score_key="hard_score",
         descending=True,
     )
@@ -439,7 +443,7 @@ def build_hard_normal_pool(
     summary = {
         "source_epoch": int(source_epoch),
         "pool_size": len(selected_rows),
-        "count_by_video": _count_rows_by_field(selected_rows, "video_id"),
+        "count_by_device": _count_rows_by_field(selected_rows, "device"),
         "top_score": float(max((row["hard_score"] for row in selected_rows), default=0.0)),
     }
     return selected_rows, summary

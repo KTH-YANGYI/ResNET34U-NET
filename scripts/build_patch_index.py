@@ -1,10 +1,12 @@
 import argparse
+import csv
+import json
 import random
 import sys
+import ast
 from collections import Counter
 from pathlib import Path
 
-import cv2
 import numpy as np
 from PIL import Image
 
@@ -15,11 +17,79 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.datasets import read_mask_binary
-from src.utils import ensure_dir, load_yaml, read_csv_rows, save_json, write_csv_rows
+from src.samples import load_samples, split_samples_for_fold
 
 
 MANIFEST_DIR = PROJECT_ROOT / "manifests"
+
+
+def ensure_dir(path):
+    Path(path).mkdir(parents=True, exist_ok=True)
+
+
+def read_csv_rows(path):
+    with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def write_csv_rows(path, rows, fieldnames):
+    path = Path(path)
+    ensure_dir(path.parent)
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def save_json(path, obj):
+    path = Path(path)
+    ensure_dir(path.parent)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(obj, handle, ensure_ascii=False, indent=2)
+
+
+def load_yaml(path):
+    data = {}
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            text = line.strip()
+            if text == "" or text.startswith("#") or ":" not in text:
+                continue
+
+            key, raw_value = text.split(":", 1)
+            key = key.strip()
+            value = raw_value.strip()
+
+            if value == "":
+                data[key] = ""
+                continue
+
+            lower_value = value.lower()
+            if lower_value in {"true", "false"}:
+                data[key] = lower_value == "true"
+                continue
+
+            try:
+                data[key] = ast.literal_eval(value)
+                continue
+            except Exception:
+                pass
+
+            try:
+                if any(char in value for char in [".", "e", "E"]):
+                    data[key] = float(value)
+                else:
+                    data[key] = int(value)
+                continue
+            except Exception:
+                data[key] = value.strip("\"'")
+
+    return data
+
+
+def read_mask_binary(path):
+    mask = Image.open(Path(path)).convert("L")
+    return (np.array(mask) > 0).astype(np.uint8)
 
 
 def parse_args():
@@ -50,6 +120,7 @@ def load_patch_cfg(config_path):
 
     return {
         "n_folds": int(cfg.get("n_folds", 4)),
+        "samples_path": str(cfg.get("samples_path", "")).strip(),
         "patch_out_size": int(cfg.get("patch_out_size", 384)),
         "positive_center_crop_sizes": normalize_int_list(cfg.get("positive_center_crop_sizes"), [320, 384, 448]),
         "positive_shift_crop_sizes": normalize_int_list(cfg.get("positive_shift_crop_sizes"), [320, 384, 448]),
@@ -100,23 +171,59 @@ def mask_to_components(mask):
     if int(binary_mask.sum()) == 0:
         return []
 
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
-
     components = []
+    height, width = binary_mask.shape
+    visited = np.zeros_like(binary_mask, dtype=bool)
+    neighbor_offsets = [
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
+    ]
 
-    for label_index in range(1, num_labels):
-        area_px = int(stats[label_index, cv2.CC_STAT_AREA])
-        if area_px <= 0:
+    start_ys, start_xs = np.where(binary_mask > 0)
+
+    for start_y, start_x in zip(start_ys, start_xs):
+        if visited[start_y, start_x]:
             continue
 
-        x_min = int(stats[label_index, cv2.CC_STAT_LEFT])
-        y_min = int(stats[label_index, cv2.CC_STAT_TOP])
-        bbox_w = int(stats[label_index, cv2.CC_STAT_WIDTH])
-        bbox_h = int(stats[label_index, cv2.CC_STAT_HEIGHT])
-        x_max = x_min + bbox_w - 1
-        y_max = y_min + bbox_h - 1
+        stack = [(int(start_y), int(start_x))]
+        visited[start_y, start_x] = True
+        coords = []
 
-        component_mask = (labels == label_index).astype(np.uint8)
+        while len(stack) > 0:
+            y, x = stack.pop()
+            coords.append((y, x))
+
+            for dy, dx in neighbor_offsets:
+                ny = y + dy
+                nx = x + dx
+                if ny < 0 or ny >= height or nx < 0 or nx >= width:
+                    continue
+                if visited[ny, nx] or binary_mask[ny, nx] == 0:
+                    continue
+                visited[ny, nx] = True
+                stack.append((ny, nx))
+
+        if len(coords) == 0:
+            continue
+
+        ys = np.asarray([coord[0] for coord in coords], dtype=np.int32)
+        xs = np.asarray([coord[1] for coord in coords], dtype=np.int32)
+        area_px = int(len(coords))
+        x_min = int(xs.min())
+        x_max = int(xs.max())
+        y_min = int(ys.min())
+        y_max = int(ys.max())
+        bbox_w = x_max - x_min + 1
+        bbox_h = y_max - y_min + 1
+
+        component_mask = np.zeros_like(binary_mask, dtype=np.uint8)
+        component_mask[ys, xs] = 1
 
         components.append(
             {
@@ -128,8 +235,8 @@ def mask_to_components(mask):
                     "y_max": y_max,
                     "bbox_w": bbox_w,
                     "bbox_h": bbox_h,
-                    "center_x": float(centroids[label_index][0]),
-                    "center_y": float(centroids[label_index][1]),
+                    "center_x": float(xs.mean()),
+                    "center_y": float(ys.mean()),
                 },
                 "mask": component_mask,
             }
@@ -867,23 +974,33 @@ def write_patch_index_csv(path, patch_rows):
 def main():
     args = parse_args()
     patch_cfg = load_patch_cfg(args.config)
+    sample_rows = None
+    if patch_cfg["samples_path"] != "":
+        sample_rows = load_samples(patch_cfg["samples_path"], PROJECT_ROOT)
 
     summary = {
         "n_folds": int(patch_cfg["n_folds"]),
         "patch_out_size": int(patch_cfg["patch_out_size"]),
+        "samples_path": patch_cfg["samples_path"],
         "patch_cfg": {
             key: value
             for key, value in patch_cfg.items()
-            if key not in {"n_folds", "patch_out_size"}
+            if key not in {"n_folds", "patch_out_size", "samples_path"}
         },
         "folds": [],
     }
 
     for fold_index in range(int(patch_cfg["n_folds"])):
-        defect_train_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_train.csv")
-        defect_val_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_val.csv")
-        normal_train_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_train.csv")
-        normal_val_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_val.csv")
+        if sample_rows is not None:
+            defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = split_samples_for_fold(
+                sample_rows,
+                fold=fold_index,
+            )
+        else:
+            defect_train_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_train.csv")
+            defect_val_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_val.csv")
+            normal_train_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_train.csv")
+            normal_val_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_val.csv")
 
         train_seed = 1000 + fold_index
         val_seed = 2000 + fold_index

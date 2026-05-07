@@ -3,6 +3,7 @@ seed: 42
 fold: 0
 
 image_size: 640
+samples_path: manifests/samples.csv
 batch_size: 4
 epochs: 25
 
@@ -25,14 +26,6 @@ min_lr: 1.0e-7
 num_workers: 8
 pretrained: false
 device: cuda
-wandb_enable: true
-wandb_mode: online
-wandb_project: unet-two-stage
-wandb_entity: ""
-wandb_group: baseline
-wandb_job_type: train
-wandb_run_name_template: "{stage}_fold{fold}"
-wandb_tags: ["stage2"]
 auto_evaluate_after_train: true
 
 threshold: 0.50
@@ -60,12 +53,6 @@ stage2_hard_normal_ratio: 0.40
 hard_normal_warmup_epochs: 2
 hard_normal_refresh_every: 2
 hard_normal_pool_factor: 3.0
-frame_min_gap: 1
-
-defect_train_manifest_template: manifests/defect_fold{fold}_train.csv
-defect_val_manifest_template: manifests/defect_fold{fold}_val.csv
-normal_train_manifest_template: manifests/normal_fold{fold}_train.csv
-normal_val_manifest_template: manifests/normal_fold{fold}_val.csv
 
 stage1_checkpoint_template: outputs/stage1/fold{fold}/best_stage1.pt
 save_dir_template: outputs/stage2/fold{fold}

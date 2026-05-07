@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.model import build_model
+from src.samples import load_samples, split_samples_for_fold
 from src.trainer import load_checkpoint, validate_stage2
 from src.utils import load_yaml, read_csv_rows, save_json, write_csv_rows
 
@@ -72,12 +73,22 @@ def build_min_area_grid(cfg):
     return [int(item) for item in values]
 
 
-def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None):
-    device = torch.device("cuda" if torch.cuda.is_available() and str(cfg.get("device", "auto")).lower() != "cpu" else "cpu")
+def load_val_rows(cfg, fold):
+    samples_path = str(cfg.get("samples_path", "")).strip()
+    if samples_path != "":
+        sample_rows = load_samples(samples_path, PROJECT_ROOT)
+        _, defect_val_rows, _, normal_val_rows = split_samples_for_fold(sample_rows, fold=fold)
+        return defect_val_rows + normal_val_rows
 
     defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
     normal_val_rows = read_csv_rows(resolve_path(cfg["normal_val_manifest"]))
-    rows = defect_val_rows + normal_val_rows
+    return defect_val_rows + normal_val_rows
+
+
+def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None):
+    device = torch.device("cuda" if torch.cuda.is_available() and str(cfg.get("device", "auto")).lower() != "cpu" else "cpu")
+
+    rows = load_val_rows(cfg, fold)
 
     image_size = int(cfg.get("image_size", 640))
     batch_size = int(cfg.get("batch_size", 4))

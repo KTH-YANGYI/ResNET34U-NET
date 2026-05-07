@@ -2,9 +2,9 @@ import argparse
 import sys
 from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
+from PIL import Image
 from torch.utils.data import DataLoader
 
 
@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.metrics import logits_to_probs, probs_to_binary_mask
 from src.model import build_model
+from src.samples import holdout_samples, load_samples
 from src.trainer import load_checkpoint, predict_on_loader
 from src.utils import ensure_dir, load_yaml, read_csv_rows, read_json, write_csv_rows
 
@@ -52,7 +53,7 @@ def save_prob_map(path, probs):
     probs = np.asarray(probs, dtype=np.float32)
     probs = np.clip(probs, 0.0, 1.0)
     image = (probs * 255.0).astype(np.uint8)
-    cv2.imwrite(str(path), image)
+    Image.fromarray(image, mode="L").save(path)
 
 
 def save_binary_mask(path, mask):
@@ -60,7 +61,15 @@ def save_binary_mask(path, mask):
     ensure_dir(path.parent)
 
     mask = (np.asarray(mask).astype(np.uint8) > 0).astype(np.uint8) * 255
-    cv2.imwrite(str(path), mask)
+    Image.fromarray(mask, mode="L").save(path)
+
+
+def load_holdout_rows(cfg):
+    samples_path = str(cfg.get("samples_path", "")).strip()
+    if samples_path != "":
+        return holdout_samples(load_samples(samples_path, PROJECT_ROOT))
+
+    return read_csv_rows(resolve_path("manifests/defect_holdout_unlabeled.csv"))
 
 
 def main():
@@ -72,7 +81,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() and str(cfg.get("device", "auto")).lower() != "cpu" else "cpu")
 
-    holdout_rows = read_csv_rows(resolve_path("manifests/defect_holdout_unlabeled.csv"))
+    holdout_rows = load_holdout_rows(cfg)
 
     image_size = int(cfg.get("image_size", 640))
     batch_size = int(cfg.get("batch_size", 4))

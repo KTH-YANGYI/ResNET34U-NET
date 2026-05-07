@@ -24,9 +24,9 @@ from src.mining import (
     save_stage2_hard_normal_outputs,
 )
 from src.model import build_model
+from src.samples import load_samples, split_samples_for_fold
 from src.trainer import EarlyStopper, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
-from src.wandb_utils import finish_wandb_run, init_wandb_run, log_wandb_metrics, update_wandb_summary
 from scripts.evaluate_val import evaluate_and_save_stage2
 
 
@@ -86,22 +86,20 @@ def build_scaler(cfg, device):
     return torch.amp.GradScaler(device="cuda", enabled=True)
 
 
-def sample_normal_rows(normal_rows, k, seed, frame_min_gap=0):
+def sample_normal_rows(normal_rows, k, seed):
     return sample_rows_with_frame_gap(
         normal_rows,
         k=k,
         seed=seed,
-        min_frame_gap=int(frame_min_gap),
+        min_frame_gap=0,
     )
 
 
-def count_rows_by_video(rows):
+def count_rows_by_device(rows):
     counter = {}
     for row in rows:
-        video_id = str(row.get("video_id", "")).strip()
-        if video_id == "":
-            continue
-        counter[video_id] = counter.get(video_id, 0) + 1
+        device = str(row.get("device", "")).strip() or "unknown"
+        counter[device] = counter.get(device, 0) + 1
     return dict(sorted(counter.items(), key=lambda item: item[0]))
 
 
@@ -128,13 +126,10 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
 
     random_normal_k_factor = float(cfg.get("random_normal_k_factor", 1.0))
     target_random_normal_count = int(round(len(defect_train_rows) * random_normal_k_factor))
-    frame_min_gap = int(cfg.get("frame_min_gap", 0))
-
     sampled_normal_rows = sample_normal_rows(
         normal_rows=normal_train_rows,
         k=target_random_normal_count,
         seed=epoch_seed,
-        frame_min_gap=frame_min_gap,
     )
 
     if bool(cfg.get("use_hard_normal_replay", False)):
@@ -149,7 +144,7 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
         hard_normal_rows,
         k=target_hard_normal_count,
         seed=epoch_seed + 97,
-        min_frame_gap=frame_min_gap,
+        min_frame_gap=0,
         score_key="hard_score",
         descending=True,
     )
@@ -180,7 +175,7 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
         "random_normal_count": len(sampled_normal_rows),
         "hard_normal_count": len(sampled_hard_normal_rows),
         "hard_pool_size": len(hard_normal_rows),
-        "train_video_counts": count_rows_by_video(epoch_rows),
+        "train_device_counts": count_rows_by_device(epoch_rows),
     }
 
 
@@ -271,6 +266,19 @@ def build_min_area_grid(cfg):
     return [int(item) for item in values]
 
 
+def load_stage2_rows(cfg, fold):
+    samples_path = str(cfg.get("samples_path", "")).strip()
+    if samples_path != "":
+        sample_rows = load_samples(samples_path, PROJECT_ROOT)
+        return split_samples_for_fold(sample_rows, fold=fold)
+
+    defect_train_rows = read_csv_rows(resolve_path(cfg["defect_train_manifest"]))
+    defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
+    normal_train_rows = read_csv_rows(resolve_path(cfg["normal_train_manifest"]))
+    normal_val_rows = read_csv_rows(resolve_path(cfg["normal_val_manifest"]))
+    return defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows
+
+
 def save_history_csv(path, history_rows):
     fieldnames = [
         "epoch",
@@ -287,7 +295,7 @@ def save_history_csv(path, history_rows):
         "random_normal_count",
         "hard_normal_count",
         "hard_pool_size",
-        "train_video_counts_json",
+        "train_device_counts_json",
         "lr_encoder",
         "lr_decoder",
     ]
@@ -305,10 +313,7 @@ def main():
 
     device = build_device(cfg)
 
-    defect_train_rows = read_csv_rows(resolve_path(cfg["defect_train_manifest"]))
-    defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
-    normal_train_rows = read_csv_rows(resolve_path(cfg["normal_train_manifest"]))
-    normal_val_rows = read_csv_rows(resolve_path(cfg["normal_val_manifest"]))
+    defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = load_stage2_rows(cfg, fold)
 
     val_loader = build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device)
 
@@ -346,12 +351,11 @@ def main():
     best_ckpt_path = save_dir / "best_stage2.pt"
     last_ckpt_path = save_dir / "last_stage2.pt"
     history_path = save_dir / "history.csv"
-    wandb_run = init_wandb_run(cfg, stage_name="stage2", fold=fold, save_dir=save_dir)
 
     history_rows = []
     best_stage2_result = None
     hard_normal_rows = []
-    hard_normal_summary = {"pool_size": 0, "count_by_video": {}, "top_score": 0.0}
+    hard_normal_summary = {"pool_size": 0, "count_by_device": {}, "top_score": 0.0}
 
     print(f"fold = {fold}")
     print(f"device = {device}")
@@ -437,7 +441,7 @@ def main():
                     "random_normal_count": epoch_sampling_summary["random_normal_count"],
                     "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
                     "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
-                    "train_video_counts_json": json.dumps(epoch_sampling_summary["train_video_counts"], ensure_ascii=False, sort_keys=True),
+                    "train_device_counts_json": json.dumps(epoch_sampling_summary["train_device_counts"], ensure_ascii=False, sort_keys=True),
                     "lr_encoder": train_stats["lr_encoder"],
                     "lr_decoder": train_stats["lr_decoder"],
                 }
@@ -494,32 +498,6 @@ def main():
                     "pool_size": len(hard_normal_rows),
                 }
 
-            wandb_payload = {
-                "epoch": epoch,
-                "stage2/train_loss": float(train_stats["loss"]),
-                "stage2/defect_dice": float(val_stats["defect_dice"]),
-                "stage2/defect_iou": float(val_stats["defect_iou"]),
-                "stage2/defect_image_recall": float(val_stats["defect_image_recall"]),
-                "stage2/normal_fpr": float(val_stats["normal_fpr"]),
-                "stage2/normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
-                "stage2/normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
-                "stage2/threshold": float(val_stats["threshold"]),
-                "stage2/min_area": int(val_stats["min_area"]),
-                "stage2/stage2_score": float(stage2_score),
-                "stage2/random_normal_count": int(epoch_sampling_summary["random_normal_count"]),
-                "stage2/hard_normal_count": int(epoch_sampling_summary["hard_normal_count"]),
-                "stage2/hard_pool_size": int(epoch_sampling_summary["hard_pool_size"]),
-                "stage2/lr_encoder": float(train_stats["lr_encoder"]),
-                "stage2/lr_decoder": float(train_stats["lr_decoder"]),
-            }
-            for video_id, count in epoch_sampling_summary["train_video_counts"].items():
-                wandb_payload[f"stage2/train_video_count/{video_id}"] = int(count)
-            for video_id, count in hard_normal_summary.get("count_by_video", {}).items():
-                wandb_payload[f"stage2/hard_pool_video_count/{video_id}"] = int(count)
-            if "top_score" in hard_normal_summary:
-                wandb_payload["stage2/hard_pool_top_score"] = float(hard_normal_summary["top_score"])
-            log_wandb_metrics(wandb_run, wandb_payload, step=epoch)
-
             print(
                 f"epoch {epoch}/{epochs} | "
                 f"random_normal={epoch_sampling_summary['random_normal_count']} | "
@@ -541,10 +519,9 @@ def main():
                 print("early stopping triggered, stage2 stopped early.")
                 break
     finally:
-        auto_eval_metrics = None
         if bool(cfg.get("auto_evaluate_after_train", True)) and best_ckpt_path.exists():
             try:
-                auto_eval_metrics = evaluate_and_save_stage2(
+                evaluate_and_save_stage2(
                     cfg=cfg,
                     fold=fold,
                     checkpoint_path=best_ckpt_path,
@@ -553,17 +530,6 @@ def main():
                 print("automatic validation export finished.")
             except Exception as exc:
                 print(f"Warning: automatic validation export failed. Detail: {exc}")
-
-        update_wandb_summary(
-            wandb_run,
-            {
-                "stage2/best": best_stage2_result or {},
-                "stage2/final_hard_normal_summary": hard_normal_summary,
-                "stage2/history_rows": len(history_rows),
-                "stage2/auto_eval": auto_eval_metrics or {},
-            },
-        )
-        finish_wandb_run(wandb_run)
 
     print("stage2 training finished.")
 
