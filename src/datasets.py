@@ -281,6 +281,9 @@ class ROIDataset(Dataset):
             "frame_id": str(row.get("frame_id", "")).strip(),
             "sample_type": row.get("sample_type", ""),
             "source_split": row.get("source_split", ""),
+            "device": row.get("device", ""),
+            "defect_class": row.get("defect_class", ""),
+            "holdout_reason": row.get("holdout_reason", ""),
             "is_labeled": to_bool(row.get("is_labeled", False)),
         }
 

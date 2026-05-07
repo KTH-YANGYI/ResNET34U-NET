@@ -59,6 +59,7 @@ Notes:
 - `crack` images must have same-stem LabelMe JSON files; masks are generated under `generated_masks/`.
 - `normal` images are used as negative samples.
 - `broken` images are unlabeled holdout samples by default.
+- By default, `prepare_samples.py` also reserves 20% of labeled `crack` and `normal` images as inference-only holdout with a fixed seed.
 - Cross-validation is image-level random splitting; video mapping files are not used.
 
 ## Pipeline
@@ -68,6 +69,14 @@ Notes:
 ```bash
 python scripts/prepare_samples.py
 ```
+
+The default split keeps 20% of `crack` and `normal` out of all training and validation folds:
+
+```bash
+python scripts/prepare_samples.py --test-ratio 0.20 --test-seed 2026
+```
+
+Use `--test-ratio 0` only when you want every labeled/normal sample available for cross-validation.
 
 If the dataset is somewhere else, pass it explicitly:
 
@@ -80,6 +89,8 @@ This step scans the dataset and writes:
 - `manifests/samples.csv`
 - `manifests/samples_summary.json`
 - `generated_masks/{device}/crack/*.png`
+
+Rows with `split=trainval` are used by Stage1/Stage2. Rows with `split=holdout` are never used for training and are consumed by `scripts/infer_holdout.py`.
 
 Run this step again on the training server. `manifests/samples.csv` stores absolute image and mask paths for the current machine, so a local copy should not be reused after moving to a server.
 
@@ -149,6 +160,7 @@ bash scripts/train_all_folds.sh --gpus 0,1 --skip-prepare
 bash scripts/train_all_folds.sh --gpus 0 --stage1-only
 bash scripts/train_all_folds.sh --gpus 0 --stage2-only --skip-prepare
 bash scripts/train_all_folds.sh --gpus 0,1,2,3 --with-holdout
+bash scripts/train_all_folds.sh --gpus 0,1,2,3 --test-ratio 0.20 --test-seed 2026
 ```
 
 Logs are written to:

@@ -36,6 +36,7 @@ SAMPLE_FIELDNAMES = [
     "source_split",
     "device",
     "defect_class",
+    "holdout_reason",
     "cv_fold",
     "split",
 ]
@@ -49,6 +50,22 @@ def parse_args():
     parser.add_argument("--summary-path", type=str, default=str(DEFAULT_SUMMARY_PATH), help="Output summary JSON path")
     parser.add_argument("--n-folds", type=int, default=4, help="Number of CV folds")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--test-ratio",
+        "--holdout-ratio",
+        dest="test_ratio",
+        type=float,
+        default=0.20,
+        help="Fraction of crack/normal samples reserved as inference-only holdout. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--test-seed",
+        "--holdout-seed",
+        dest="test_seed",
+        type=int,
+        default=2026,
+        help="Random seed for the inference-only holdout split.",
+    )
     return parser.parse_args()
 
 
@@ -145,6 +162,60 @@ def assign_cv_folds(rows, n_folds, seed):
             row["cv_fold"] = int(index % n_folds)
 
 
+def assign_inference_holdout(rows, test_ratio, test_seed):
+    test_ratio = float(test_ratio)
+    if test_ratio < 0.0 or test_ratio >= 1.0:
+        raise ValueError("--test-ratio must be >= 0 and < 1")
+
+    summary = {
+        "enabled": test_ratio > 0.0,
+        "test_ratio": test_ratio,
+        "test_seed": int(test_seed),
+        "selected_count": 0,
+        "selected_by_device_class": {},
+    }
+
+    if test_ratio <= 0.0:
+        return summary
+
+    grouped = defaultdict(list)
+    for row in rows:
+        if row["split"] != "trainval":
+            continue
+        if row["sample_type"] not in {"defect", "normal"}:
+            continue
+
+        key = (row["device"], row["sample_type"], row["defect_class"])
+        grouped[key].append(row)
+
+    rng = random.Random(test_seed)
+    selected_counts = Counter()
+
+    for key in sorted(grouped.keys()):
+        key_rows = sorted(grouped[key], key=lambda row: row["sample_id"])
+        n_rows = len(key_rows)
+        if n_rows <= 1:
+            continue
+
+        rng.shuffle(key_rows)
+        holdout_count = int(round(n_rows * test_ratio))
+        holdout_count = max(1, holdout_count)
+        holdout_count = min(holdout_count, n_rows - 1)
+
+        for row in key_rows[:holdout_count]:
+            row["split"] = "holdout"
+            row["holdout_reason"] = "test_split"
+            row["cv_fold"] = ""
+            selected_counts[key] += 1
+
+    summary["selected_count"] = int(sum(selected_counts.values()))
+    summary["selected_by_device_class"] = {
+        "|".join(key): int(value)
+        for key, value in sorted(selected_counts.items(), key=lambda item: item[0])
+    }
+    return summary
+
+
 def scan_roi_dataset(dataset_root, mask_dir):
     dataset_root = Path(dataset_root)
     mask_dir = Path(mask_dir)
@@ -173,6 +244,8 @@ def scan_roi_dataset(dataset_root, mask_dir):
                 is_labeled = False
                 sample_type = "normal" if defect_class == "normal" else "defect"
                 split = "trainval"
+                source_split = "trainval_pool"
+                holdout_reason = ""
 
                 if defect_class == "crack":
                     if not json_path.exists():
@@ -184,6 +257,8 @@ def scan_roi_dataset(dataset_root, mask_dir):
                 elif defect_class == "broken":
                     sample_type = "broken_unlabeled"
                     split = "holdout"
+                    source_split = "broken_folder"
+                    holdout_reason = "broken_unlabeled"
 
                 rows.append(
                     {
@@ -194,9 +269,10 @@ def scan_roi_dataset(dataset_root, mask_dir):
                         "json_path": path_to_str(json_path) if json_path.exists() else "",
                         "sample_type": sample_type,
                         "is_labeled": str(bool(is_labeled)),
-                        "source_split": split,
+                        "source_split": source_split,
                         "device": device,
                         "defect_class": defect_class,
+                        "holdout_reason": holdout_reason,
                         "cv_fold": "",
                         "split": split,
                     }
@@ -210,7 +286,7 @@ def count_by(rows, *keys):
     return {"|".join(key): int(value) for key, value in sorted(counter.items())}
 
 
-def build_summary(rows, mask_area_by_sample, n_folds, seed, dataset_root, samples_path, mask_dir):
+def build_summary(rows, mask_area_by_sample, n_folds, seed, dataset_root, samples_path, mask_dir, holdout_summary):
     fold_counts = Counter()
     for row in rows:
         if str(row.get("cv_fold", "")).strip() != "":
@@ -233,10 +309,13 @@ def build_summary(rows, mask_area_by_sample, n_folds, seed, dataset_root, sample
         "mask_dir": path_to_str(mask_dir),
         "n_folds": int(n_folds),
         "seed": int(seed),
+        "inference_holdout": holdout_summary,
         "total_count": len(rows),
         "count_by_split": count_by(rows, "split"),
+        "count_by_split_device_class": count_by(rows, "split", "device", "defect_class"),
         "count_by_device_class": count_by(rows, "device", "defect_class"),
         "count_by_sample_type": count_by(rows, "sample_type"),
+        "count_by_holdout_reason": count_by(rows, "holdout_reason"),
         "fold_counts": dict(sorted(fold_counts.items(), key=lambda item: item[0])),
         "mask_area_px": mask_area_summary,
     }
@@ -253,11 +332,21 @@ def main():
         raise FileNotFoundError(f"Dataset root does not exist: {dataset_root}")
 
     rows, mask_area_by_sample = scan_roi_dataset(dataset_root, mask_dir)
+    holdout_summary = assign_inference_holdout(rows, test_ratio=args.test_ratio, test_seed=args.test_seed)
     assign_cv_folds(rows, n_folds=args.n_folds, seed=args.seed)
     rows = sorted(rows, key=lambda row: (row["split"], row["device"], row["defect_class"], row["image_name"]))
 
     write_csv_rows(samples_path, rows, SAMPLE_FIELDNAMES)
-    summary = build_summary(rows, mask_area_by_sample, args.n_folds, args.seed, dataset_root, samples_path, mask_dir)
+    summary = build_summary(
+        rows,
+        mask_area_by_sample,
+        args.n_folds,
+        args.seed,
+        dataset_root,
+        samples_path,
+        mask_dir,
+        holdout_summary,
+    )
     save_json(summary_path, summary)
 
     print(
@@ -267,6 +356,7 @@ def main():
             "total_count": len(rows),
             "trainval_count": sum(1 for row in rows if row["split"] == "trainval"),
             "holdout_count": sum(1 for row in rows if row["split"] == "holdout"),
+            "test_split_holdout_count": holdout_summary["selected_count"],
         }
     )
 

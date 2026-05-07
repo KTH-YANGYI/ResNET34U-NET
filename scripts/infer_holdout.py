@@ -64,6 +64,21 @@ def save_binary_mask(path, mask):
     Image.fromarray(mask, mode="L").save(path)
 
 
+def safe_output_stem(value):
+    text = str(value).strip()
+    if text == "":
+        text = "sample"
+    return text.replace("/", "_").replace("\\", "_").replace(" ", "_")
+
+
+def to_bool(value):
+    if torch.is_tensor(value):
+        return bool(value.item())
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
 def load_holdout_rows(cfg):
     samples_path = str(cfg.get("samples_path", "")).strip()
     if samples_path != "":
@@ -124,8 +139,9 @@ def main():
     summary_rows = []
 
     for item in predictions:
+        sample_id = str(item.get("sample_id") or "").strip()
         image_name = str(item["image_name"])
-        stem = Path(image_name).stem
+        stem = safe_output_stem(sample_id or Path(image_name).stem)
 
         prob_map = logits_to_probs(item["logits"]).squeeze()
         raw_binary_mask = probs_to_binary_mask(prob_map, threshold=threshold, min_area=0)
@@ -137,7 +153,14 @@ def main():
 
         summary_rows.append(
             {
+                "sample_id": sample_id,
                 "image_name": image_name,
+                "device": str(item.get("device") or ""),
+                "defect_class": str(item.get("defect_class") or ""),
+                "sample_type": str(item.get("sample_type") or ""),
+                "source_split": str(item.get("source_split") or ""),
+                "holdout_reason": str(item.get("holdout_reason") or ""),
+                "is_labeled": str(to_bool(item.get("is_labeled", False))),
                 "threshold": threshold,
                 "min_area": min_area,
                 "max_prob": float(np.max(prob_map)),
@@ -149,7 +172,21 @@ def main():
     write_csv_rows(
         save_dir / "holdout" / "inference_summary.csv",
         summary_rows,
-        ["image_name", "threshold", "min_area", "max_prob", "raw_positive_pixels", "post_positive_pixels"],
+        [
+            "sample_id",
+            "image_name",
+            "device",
+            "defect_class",
+            "sample_type",
+            "source_split",
+            "holdout_reason",
+            "is_labeled",
+            "threshold",
+            "min_area",
+            "max_prob",
+            "raw_positive_pixels",
+            "post_positive_pixels",
+        ],
     )
 
     print(

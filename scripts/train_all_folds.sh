@@ -11,6 +11,8 @@ RUN_PREPARE=1
 RUN_STAGE1=1
 RUN_STAGE2=1
 RUN_HOLDOUT=0
+TEST_RATIO="${TEST_RATIO:-0.20}"
+TEST_SEED="${TEST_SEED:-2026}"
 
 usage() {
   cat <<'EOF'
@@ -25,6 +27,9 @@ Options:
   --stage1-only         Run only Stage1 after optional preparation.
   --stage2-only         Run only Stage2 after optional sample preparation.
   --with-holdout        Run infer_holdout.py for each fold after Stage2.
+  --test-ratio VALUE    Fraction of crack/normal samples reserved for inference-only holdout.
+                        Default: 0.20. Use 0 to disable.
+  --test-seed VALUE     Seed for the inference-only holdout split. Default: 2026.
   --python PATH         Python executable. Default: python or $PYTHON.
   -h, --help            Show this help.
 
@@ -61,6 +66,14 @@ while [[ $# -gt 0 ]]; do
     --with-holdout)
       RUN_HOLDOUT=1
       shift
+      ;;
+    --test-ratio|--holdout-ratio)
+      TEST_RATIO="$2"
+      shift 2
+      ;;
+    --test-seed|--holdout-seed)
+      TEST_SEED="$2"
+      shift 2
       ;;
     --python)
       PYTHON_BIN="$2"
@@ -182,9 +195,11 @@ echo "Python: ${PYTHON_BIN}"
 echo "Folds:  ${FOLDS}"
 echo "GPUs:   ${GPUS}"
 echo "Logs:   ${LOG_DIR}"
+echo "Test holdout ratio: ${TEST_RATIO}"
+echo "Test holdout seed:  ${TEST_SEED}"
 
 if [[ "$RUN_PREPARE" -eq 1 ]]; then
-  run_logged "prepare_samples" "$PYTHON_BIN" scripts/prepare_samples.py
+  run_logged "prepare_samples" "$PYTHON_BIN" scripts/prepare_samples.py --test-ratio "$TEST_RATIO" --test-seed "$TEST_SEED"
 
   if [[ "$RUN_STAGE1" -eq 1 ]]; then
     run_logged "build_patch_index" "$PYTHON_BIN" scripts/build_patch_index.py --config "$STAGE1_CONFIG"

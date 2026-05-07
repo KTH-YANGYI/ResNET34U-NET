@@ -48,6 +48,7 @@ STAGE2_HARD_NORMAL_FIELDNAMES = [
     "source_split",
     "device",
     "defect_class",
+    "holdout_reason",
     "cv_fold",
     "split",
     "video_id",
