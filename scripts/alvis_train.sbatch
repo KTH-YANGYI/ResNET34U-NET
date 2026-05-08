@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-#SBATCH -A CHANGE_ME
-#SBATCH -p alvis
-#SBATCH -J unet_two_stage
+#SBATCH --account=CHANGE_ME
+#SBATCH --partition=alvis
+#SBATCH --job-name=unet_two_stage
 #SBATCH --gpus-per-node=A40:4
-#SBATCH -t 0-06:00:00
-#SBATCH -o slurm-%x_%j.out
-#SBATCH -e slurm-%x_%j.err
+#SBATCH --time=0-06:00:00
+#SBATCH --output=slurm-%x_%j.out
+#SBATCH --error=slurm-%x_%j.err
 
 set -euo pipefail
 

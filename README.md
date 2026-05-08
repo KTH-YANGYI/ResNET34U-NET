@@ -183,13 +183,13 @@ Alvis uses Slurm and software modules. Do not install Python system-wide. Find a
 module spider PyTorch-bundle
 ```
 
-Edit `scripts/alvis_train.sbatch` and replace:
+Edit the Slurm script you plan to use and replace:
 
 ```text
-#SBATCH -A CHANGE_ME
+#SBATCH --account=CHANGE_ME
 ```
 
-with your NAISS/C3SE project account. Then submit a job:
+with the exact project account shown by `projinfo`. Use the Slurm account name, not your CID. Then submit a job:
 
 ```bash
 sbatch scripts/alvis_train.sbatch
@@ -224,6 +224,12 @@ For a single A100 job, use the included A100 template:
 
 ```bash
 sbatch scripts/alvis_train_a100.sbatch
+```
+
+This A100 script requests:
+
+```text
+#SBATCH --gpus-per-node=A100:1
 ```
 
 With one GPU, the default `0,1,2,3` folds run sequentially on GPU `0`. To train only one fold on the A100:
