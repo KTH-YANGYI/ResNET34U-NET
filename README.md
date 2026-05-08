@@ -220,12 +220,25 @@ That means the default submission runs four folds in parallel:
 sbatch scripts/alvis_train.sbatch
 ```
 
+For a single A100 job, use the included A100 template:
+
+```bash
+sbatch scripts/alvis_train_a100.sbatch
+```
+
+With one GPU, the default `0,1,2,3` folds run sequentially on GPU `0`. To train only one fold on the A100:
+
+```bash
+EXTRA_ARGS="--folds 0" sbatch --export=ALL scripts/alvis_train_a100.sbatch
+```
+
 To request a different GPU type or count, edit the `--gpus-per-node` line. Examples:
 
 ```text
 #SBATCH --gpus-per-node=T4:1
 #SBATCH --gpus-per-node=T4:4
 #SBATCH --gpus-per-node=A40:4
+#SBATCH --gpus-per-node=A100:1
 #SBATCH --gpus-per-node=A100:4
 ```
 
