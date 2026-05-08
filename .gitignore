@@ -13,7 +13,13 @@ wandb/
 readme2_en.md
 readme2_zh.md
 readme1.md
-outputs
+outputs/*
+!outputs/**/
+!outputs/**/*.csv
+!outputs/**/*.json
+!outputs/**/*.log
+!outputs/**/*.out
+!outputs/**/*.err
 scripts/export_model_arch_diagram.py
 scripts/export_model_arch_ppt_2d.py
 scripts/export_model_arch_ppt_single.py

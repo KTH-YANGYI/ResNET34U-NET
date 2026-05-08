@@ -1,0 +1,5 @@
+fold 0: train_total=1173 (pos=937, near_miss=51, hard_neg=67, normal_neg=118), val_total=425 (pos=323, near_miss=25, hard_neg=26, normal_neg=51)
+fold 1: train_total=1194 (pos=944, near_miss=59, hard_neg=66, normal_neg=125), val_total=401 (pos=317, near_miss=18, hard_neg=24, normal_neg=42)
+fold 2: train_total=1195 (pos=953, near_miss=61, hard_neg=60, normal_neg=121), val_total=402 (pos=312, near_miss=21, hard_neg=24, normal_neg=45)
+fold 3: train_total=1231 (pos=949, near_miss=62, hard_neg=79, normal_neg=141), val_total=361 (pos=311, near_miss=12, hard_neg=13, normal_neg=25)
+build_patch_index finished, stage1 patch indexes were written to manifests/.

@@ -1,0 +1,1 @@
+{'samples_path': '/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/manifests/samples.csv', 'summary_path': '/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/manifests/samples_summary.json', 'total_count': 444, 'trainval_count': 270, 'holdout_count': 174, 'test_split_holdout_count': 67}
