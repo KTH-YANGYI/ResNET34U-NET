@@ -62,6 +62,31 @@ Notes:
 - By default, `prepare_samples.py` also reserves 20% of labeled `crack` and `normal` images as inference-only holdout with a fixed seed.
 - Cross-validation is image-level random splitting; video mapping files are not used.
 
+### Dataset Roles And Counts
+
+For the current `dataset0505_crop640_roi` snapshot:
+
+| subset | crack | normal | broken | total |
+| --- | ---: | ---: | ---: | ---: |
+| camera | 157 | 38 | 44 | 239 |
+| phone | 106 | 36 | 63 | 205 |
+| total | 263 | 74 | 107 | 444 |
+
+The classes are used as follows:
+
+- `crack`: labeled defect images. LabelMe JSON annotations are converted to binary masks under `generated_masks/`.
+- `normal`: negative images used for training and validation.
+- `broken`: unlabeled images used only for holdout inference. They are never used by Stage1, Stage2, or CV validation.
+
+With the default split (`--test-ratio 0.20 --test-seed 2026`), `prepare_samples.py` produces:
+
+| split | crack | normal | broken | total | role |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `trainval` | 211 | 59 | 0 | 270 | Stage1/Stage2 training and CV validation |
+| `holdout` | 52 | 15 | 107 | 174 | inference only |
+
+Each fold trains on about 200 original images and validates on 66-70 original images. Stage1 expands those images into patch indexes; the Stage1 `batch_size` is a patch batch size, while the Stage2 `batch_size` is a full-image batch size.
+
 ## Pipeline
 
 ### 1. Generate manifests
