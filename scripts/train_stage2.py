@@ -111,20 +111,24 @@ def stage2_row_key(row):
     )
 
 
-def sample_hard_normal_rows(hard_normal_rows, k, seed):
+def sample_hard_normal_rows(hard_normal_rows, k, seed, max_repeats_per_row=2):
     if int(k) <= 0 or len(hard_normal_rows) == 0:
         return []
 
+    max_repeats_per_row = max(1, int(max_repeats_per_row))
+    max_sample_count = len(hard_normal_rows) * max_repeats_per_row
+    k = min(int(k), max_sample_count)
+
     selected_rows = sample_rows_with_frame_gap(
         hard_normal_rows,
-        k=int(k),
+        k=k,
         seed=seed,
         min_frame_gap=0,
         score_key="hard_score",
         descending=True,
     )
 
-    if len(selected_rows) >= int(k):
+    if len(selected_rows) >= k:
         return selected_rows
 
     refill_pool = selected_rows or sorted(
@@ -138,6 +142,9 @@ def sample_hard_normal_rows(hard_normal_rows, k, seed):
         shuffled_pool = list(refill_pool)
         rng.shuffle(shuffled_pool)
         for row in shuffled_pool:
+            row_count = sum(1 for selected_row in selected_rows if stage2_row_key(selected_row) == stage2_row_key(row))
+            if row_count >= max_repeats_per_row:
+                continue
             selected_rows.append(row)
             if len(selected_rows) >= int(k):
                 break
@@ -168,9 +175,10 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
 
     random_normal_k_factor = float(cfg.get("random_normal_k_factor", 1.0))
     target_normal_budget_count = int(round(len(defect_train_rows) * random_normal_k_factor))
+    hard_normal_max_repeats = max(1, int(cfg.get("hard_normal_max_repeats_per_epoch", 2)))
 
     if bool(cfg.get("use_hard_normal_replay", False)) and len(hard_normal_rows) > 0:
-        target_hard_normal_count = min(
+        requested_hard_normal_count = min(
             target_normal_budget_count,
             resolve_hard_normal_count(
                 defect_count=len(defect_train_rows),
@@ -178,7 +186,12 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
                 cfg=cfg,
             ),
         )
+        target_hard_normal_count = min(
+            requested_hard_normal_count,
+            len(hard_normal_rows) * hard_normal_max_repeats,
+        )
     else:
+        requested_hard_normal_count = 0
         target_hard_normal_count = 0
 
     target_random_normal_count = max(0, target_normal_budget_count - target_hard_normal_count)
@@ -186,6 +199,7 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
         hard_normal_rows=hard_normal_rows,
         k=target_hard_normal_count,
         seed=epoch_seed + 97,
+        max_repeats_per_row=hard_normal_max_repeats,
     )
     hard_normal_keys = {stage2_row_key(row) for row in sampled_hard_normal_rows}
     random_candidate_rows = [
@@ -207,11 +221,13 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
     rng.shuffle(epoch_rows)
     return epoch_rows, {
         "normal_budget_count": target_normal_budget_count,
+        "requested_hard_normal_count": requested_hard_normal_count,
         "target_random_normal_count": target_random_normal_count,
         "target_hard_normal_count": target_hard_normal_count,
         "random_normal_count": len(sampled_normal_rows),
         "hard_normal_count": len(sampled_hard_normal_rows),
         "hard_pool_size": len(hard_normal_rows),
+        "hard_normal_max_repeats_per_epoch": hard_normal_max_repeats,
         "train_device_counts": count_rows_by_device(epoch_rows),
     }
 
@@ -338,11 +354,13 @@ def save_history_csv(path, history_rows):
         "min_area",
         "stage2_score",
         "normal_budget_count",
+        "requested_hard_normal_count",
         "target_random_normal_count",
         "target_hard_normal_count",
         "random_normal_count",
         "hard_normal_count",
         "hard_pool_size",
+        "hard_normal_max_repeats_per_epoch",
         "train_device_counts_json",
         "lr_encoder",
         "lr_decoder",
@@ -423,8 +441,8 @@ def main():
     epochs = int(cfg.get("epochs", 25))
     target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
     lambda_fpr_penalty = float(cfg.get("lambda_fpr_penalty", 2.0))
-    threshold_grid = build_threshold_grid(cfg)
-    min_area_grid = build_min_area_grid(cfg)
+    train_eval_threshold = float(cfg.get("train_eval_threshold", cfg.get("threshold", 0.50)))
+    train_eval_min_area = int(cfg.get("train_eval_min_area", 0))
 
     save_dir = resolve_path(cfg["save_dir"])
     ensure_dir(save_dir)
@@ -445,6 +463,8 @@ def main():
     print(f"defect_val_count = {len(defect_val_rows)}")
     print(f"normal_train_count = {len(normal_train_rows)}")
     print(f"normal_val_count = {len(normal_val_rows)}")
+    print(f"train_eval_threshold = {train_eval_threshold}")
+    print(f"train_eval_min_area = {train_eval_min_area}")
     print(f"save_dir = {save_dir}")
 
     try:
@@ -475,8 +495,8 @@ def main():
                 model=model,
                 loader=val_loader,
                 device=device,
-                threshold_values=threshold_grid,
-                min_area_values=min_area_grid,
+                threshold=train_eval_threshold,
+                min_area=train_eval_min_area,
                 target_normal_fpr=target_normal_fpr,
                 lambda_fpr_penalty=lambda_fpr_penalty,
                 progress_desc=f"Val {epoch}/{epochs}",
@@ -521,11 +541,13 @@ def main():
                     "min_area": val_stats["min_area"],
                     "stage2_score": val_stats["stage2_score"],
                     "normal_budget_count": epoch_sampling_summary["normal_budget_count"],
+                    "requested_hard_normal_count": epoch_sampling_summary["requested_hard_normal_count"],
                     "target_random_normal_count": epoch_sampling_summary["target_random_normal_count"],
                     "target_hard_normal_count": epoch_sampling_summary["target_hard_normal_count"],
                     "random_normal_count": epoch_sampling_summary["random_normal_count"],
                     "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
                     "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
+                    "hard_normal_max_repeats_per_epoch": epoch_sampling_summary["hard_normal_max_repeats_per_epoch"],
                     "train_device_counts_json": json.dumps(epoch_sampling_summary["train_device_counts"], ensure_ascii=False, sort_keys=True),
                     "lr_encoder": train_stats["lr_encoder"],
                     "lr_decoder": train_stats["lr_decoder"],
@@ -581,11 +603,17 @@ def main():
                 print(
                     "Warning: hard normal pool is non-empty but no hard normal rows were sampled for this epoch."
                 )
+            if int(epoch_sampling_summary["target_hard_normal_count"]) < int(epoch_sampling_summary["requested_hard_normal_count"]):
+                print(
+                    "Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch "
+                    f"({epoch_sampling_summary['target_hard_normal_count']}/"
+                    f"{epoch_sampling_summary['requested_hard_normal_count']})."
+                )
 
             print(
                 f"epoch {epoch}/{epochs} | "
                 f"random_normal={epoch_sampling_summary['random_normal_count']} | "
-                f"hard_normal={epoch_sampling_summary['hard_normal_count']} | "
+                f"hard_normal={epoch_sampling_summary['hard_normal_count']}/{epoch_sampling_summary['requested_hard_normal_count']} | "
                 f"hard_pool={epoch_sampling_summary['hard_pool_size']} | "
                 f"train_loss={train_stats['loss']:.6f} | "
                 f"defect_dice={val_stats['defect_dice']:.6f} | "

@@ -31,6 +31,8 @@ device: cuda
 auto_evaluate_after_train: true
 
 threshold: 0.50
+train_eval_threshold: 0.50
+train_eval_min_area: 0
 
 use_imagenet_normalize: true
 augment_enable: true
@@ -52,6 +54,7 @@ min_area_grid: [0, 8, 16, 24, 32, 48]
 random_normal_k_factor: 1.0
 use_hard_normal_replay: true
 stage2_hard_normal_ratio: 0.40
+hard_normal_max_repeats_per_epoch: 2
 hard_normal_warmup_epochs: 2
 hard_normal_refresh_every: 2
 hard_normal_pool_factor: 3.0

@@ -203,6 +203,8 @@ def compute_binary_dice_from_logits(logits, target, threshold=0.5, eps=1e-6):
 
 def train_one_epoch(model, loader, criterion, optimizer, scaler, device, progress_desc=None):
     model.train()
+    if hasattr(model, "apply_encoder_freeze_mode"):
+        model.apply_encoder_freeze_mode()
 
     total_loss = 0.0
     total_samples = 0

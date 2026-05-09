@@ -329,6 +329,18 @@ Use this when you want to rerun validation export separately. It writes:
 - `val_per_image.csv`
 - `val_postprocess_search.csv`
 
+To render false-positive, false-negative, and worst-defect overlays for a fold:
+
+```bash
+python scripts/visualize_error_analysis.py --config configs/stage2.yaml --fold 0
+```
+
+This writes `summary.csv`, per-image overlay panels, and contact sheets under:
+
+```text
+outputs/stage2/fold{fold}/error_analysis/
+```
+
 ### 6. Run holdout inference
 
 ```bash

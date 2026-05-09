@@ -125,11 +125,13 @@ def build_stage1_sampler(train_rows, cfg, generator):
     )
 
 
-def build_stage1_loaders_from_rows(train_rows, val_rows, cfg, device):
+def build_stage1_loaders_from_rows(train_rows, val_rows, cfg, device, seed=None):
     patch_out_size = int(cfg.get("patch_out_size", 384))
     batch_size = int(cfg.get("batch_size", 16))
     num_workers = int(cfg.get("num_workers", 8))
-    seed = int(cfg.get("seed", 42))
+    if seed is None:
+        seed = int(cfg.get("seed", 42))
+    seed = int(seed)
 
     train_dataset = PatchDataset(
         train_rows,
@@ -281,12 +283,8 @@ def main():
     device = build_device(cfg)
     base_train_rows = read_csv_rows(resolve_path(cfg["train_index_path"]))
     val_rows = read_csv_rows(resolve_path(cfg["val_index_path"]))
-    train_loader, val_loader, train_patch_count, val_patch_count = build_stage1_loaders_from_rows(
-        base_train_rows,
-        val_rows,
-        cfg,
-        device,
-    )
+    train_patch_count = len(base_train_rows)
+    val_patch_count = len(val_rows)
 
     model = build_model(pretrained=bool(cfg.get("pretrained", True)))
     model.to(device)
@@ -343,6 +341,7 @@ def main():
             val_rows,
             cfg,
             device,
+            seed=int(cfg.get("seed", 42)) + epoch * 1009,
         )
         train_family_counts = count_patch_families(current_train_rows)
 

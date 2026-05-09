@@ -49,6 +49,7 @@ class UNetResNet34(nn.Module):
     """ 编码器用RESNET34, 解码器用unet解码器的分割模型实现"""
     def __init__(self, encoder_weights=None):
         super().__init__()
+        self._encoder_trainable = True
 
         #======================================================================================
         #构建Resnet编码器
@@ -88,12 +89,8 @@ class UNetResNet34(nn.Module):
             nn.Conv2d(32,1,kernel_size=1),
         )        
 
-    def encoder_parameters(self):
-        """
-        返回“编码器部分”的参数。
-        """
-
-        modules = [
+    def encoder_modules(self):
+        return [
             self.encoder_stem,
             self.encoder_layer1,
             self.encoder_layer2,
@@ -101,7 +98,12 @@ class UNetResNet34(nn.Module):
             self.encoder_layer4,
         ]
 
-        for module in modules:
+    def encoder_parameters(self):
+        """
+        返回“编码器部分”的参数。
+        """
+
+        for module in self.encoder_modules():
             yield from module.parameters()        
 
     def decoder_parameters(self):
@@ -118,8 +120,16 @@ class UNetResNet34(nn.Module):
             yield from module.parameters()
 
     def set_encoder_trainable(self, trainable:bool):
+        self._encoder_trainable = bool(trainable)
         for param in self.encoder_parameters():
-            param.requires_grad = trainable    
+            param.requires_grad = trainable
+
+    def apply_encoder_freeze_mode(self):
+        if self._encoder_trainable:
+            return
+
+        for module in self.encoder_modules():
+            module.eval()
 
 
     def forward(self,x):
@@ -169,5 +179,4 @@ def build_model(pretrained=True):
 
         model = UNetResNet34(encoder_weights=None)
         return model
-
 
