@@ -45,11 +45,22 @@ class DecoderBlock(nn.Module):
 
         return x
     
+def make_aux_head(in_channels, mid_channels=32):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1, bias=False),
+        nn.BatchNorm2d(mid_channels),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(mid_channels, 1, kernel_size=1),
+    )
+
+
 class UNetResNet34(nn.Module):
     """ 编码器用RESNET34, 解码器用unet解码器的分割模型实现"""
-    def __init__(self, encoder_weights=None):
+    def __init__(self, encoder_weights=None, deep_supervision=False, boundary_aux=False):
         super().__init__()
         self._encoder_trainable = True
+        self.deep_supervision = bool(deep_supervision)
+        self.boundary_aux = bool(boundary_aux)
 
         #======================================================================================
         #构建Resnet编码器
@@ -87,7 +98,22 @@ class UNetResNet34(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Conv2d(32,1,kernel_size=1),
-        )        
+        )
+        if self.deep_supervision:
+            self.deep_supervision_heads = nn.ModuleList(
+                [
+                    make_aux_head(256),
+                    make_aux_head(128),
+                    make_aux_head(64),
+                ]
+            )
+        else:
+            self.deep_supervision_heads = nn.ModuleList()
+
+        if self.boundary_aux:
+            self.boundary_head = make_aux_head(64, mid_channels=16)
+        else:
+            self.boundary_head = None
 
     def encoder_modules(self):
         return [
@@ -115,7 +141,10 @@ class UNetResNet34(nn.Module):
             self.decoder2,
             self.decoder1,
             self.segmentation_head,
+            self.deep_supervision_heads,
             ]
+        if self.boundary_head is not None:
+            modules.append(self.boundary_head)
         for module in modules:
             yield from module.parameters()
 
@@ -151,24 +180,54 @@ class UNetResNet34(nn.Module):
             align_corners=False,
         )
         logits = self.segmentation_head(d1)
-        return logits
+
+        if not self.deep_supervision and not self.boundary_aux:
+            return logits
+
+        output = {"logits": logits}
+        if self.deep_supervision:
+            aux_features = [d4, d3, d2]
+            aux_logits = []
+            for head, features in zip(self.deep_supervision_heads, aux_features):
+                aux_logits.append(
+                    F.interpolate(
+                        head(features),
+                        size=input_size,
+                        mode="bilinear",
+                        align_corners=False,
+                    )
+                )
+            output["aux_logits"] = aux_logits
+
+        if self.boundary_aux and self.boundary_head is not None:
+            output["boundary_logits"] = self.boundary_head(d1)
+
+        return output
        
 
 
-def build_model(pretrained=True):
+def build_model(pretrained=True, deep_supervision=False, boundary_aux=False):
     """
     构建模型实例。
     """
 
     # 如果不需要预训练，直接用随机初始化
     if not pretrained:
-        model = UNetResNet34(encoder_weights=None)
+        model = UNetResNet34(
+            encoder_weights=None,
+            deep_supervision=deep_supervision,
+            boundary_aux=boundary_aux,
+        )
         return model
 
     # 如果需要预训练，就尝试加载官方默认权重
     try:
         weights = ResNet34_Weights.DEFAULT
-        model = UNetResNet34(encoder_weights=weights)
+        model = UNetResNet34(
+            encoder_weights=weights,
+            deep_supervision=deep_supervision,
+            boundary_aux=boundary_aux,
+        )
         return model
 
     except Exception as e:
@@ -177,6 +236,9 @@ def build_model(pretrained=True):
         print("Warning: 预训练权重加载失败，将改为随机初始化。")
         print(f"Detail: {e}")
 
-        model = UNetResNet34(encoder_weights=None)
+        model = UNetResNet34(
+            encoder_weights=None,
+            deep_supervision=deep_supervision,
+            boundary_aux=boundary_aux,
+        )
         return model
-

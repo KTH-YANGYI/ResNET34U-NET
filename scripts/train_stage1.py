@@ -136,10 +136,14 @@ def build_stage1_loaders_from_rows(train_rows, val_rows, cfg, device, seed=None)
     train_dataset = PatchDataset(
         train_rows,
         transform=build_stage1_train_transform(patch_out_size, cfg=cfg),
+        cache_enabled=bool(cfg.get("patch_worker_cache", False)),
+        cache_max_items=int(cfg.get("patch_worker_cache_max_items", 0)),
     )
     val_dataset = PatchDataset(
         val_rows,
         transform=build_stage1_eval_transform(patch_out_size, cfg=cfg),
+        cache_enabled=bool(cfg.get("patch_worker_cache", False)),
+        cache_max_items=int(cfg.get("patch_worker_cache_max_items", 0)),
     )
 
     generator = torch.Generator()

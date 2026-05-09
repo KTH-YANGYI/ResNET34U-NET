@@ -227,6 +227,17 @@ Each normal-FP-loss variant writes its own `EXPERIMENT.md` under its output
 directory so the experiment purpose, config, logs, and pooled OOF result are
 easy to review later.
 
+For the third P0 A40 batch, run the code/runtime and auxiliary-loss experiments:
+
+```bash
+bash scripts/run_p0_a40_third_batch.sh
+```
+
+This writes a PatchDataset worker-local cache note under
+`outputs/experiments/p0_a40_patchdataset_cache_20260509/` and then runs separate
+Stage2 experiments for deep supervision and boundary auxiliary loss. Each output
+directory gets its own `EXPERIMENT.md`.
+
 Useful variants:
 
 ```bash

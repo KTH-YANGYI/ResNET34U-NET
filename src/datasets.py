@@ -289,20 +289,37 @@ class ROIDataset(Dataset):
 
 
 class PatchDataset(Dataset):
-    def __init__(self, patch_rows, transform=None):
+    def __init__(self, patch_rows, transform=None, cache_enabled=False, cache_max_items=0):
         self.patch_rows = list(patch_rows)
         self.transform = transform
+        self.cache_enabled = bool(cache_enabled)
+        self.cache_max_items = int(cache_max_items)
+        self._image_cache = {}
+        self._mask_cache = {}
 
     def __len__(self):
         return len(self.patch_rows)
 
+    def _read_cached(self, cache, key, read_fn):
+        if not self.cache_enabled:
+            return read_fn(key)
+
+        key = str(key)
+        if key in cache:
+            return cache[key]
+
+        value = read_fn(key)
+        if self.cache_max_items <= 0 or len(cache) < self.cache_max_items:
+            cache[key] = value
+        return value
+
     def __getitem__(self, index):
         row = self.patch_rows[index]
-        image = read_image_rgb(row["image_path"])
+        image = self._read_cached(self._image_cache, row["image_path"], read_image_rgb)
 
         mask_path = str(row.get("mask_path", "")).strip()
         if mask_path != "":
-            mask = read_mask_binary(mask_path)
+            mask = self._read_cached(self._mask_cache, mask_path, read_mask_binary)
         else:
             image_h, image_w = image.shape[:2]
             mask = build_empty_mask(image_h, image_w)

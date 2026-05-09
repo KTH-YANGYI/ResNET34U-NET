@@ -3,6 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def get_primary_logits(output):
+    if isinstance(output, dict):
+        return output["logits"]
+    return output
+
+
 def prepare_logits_and_target(logits,target):
     """
     logits :[batch_size, logit, height,width]
@@ -62,6 +68,10 @@ class BCEDiceLoss(nn.Module):
         pos_weight=None,
         normal_fp_loss_weight=0.0,
         normal_fp_topk_ratio=1.0,
+        deep_supervision_weight=0.0,
+        deep_supervision_decay=0.5,
+        boundary_aux_weight=0.0,
+        boundary_width=3,
         eps=1e-6,
     ):
         super().__init__()
@@ -69,6 +79,10 @@ class BCEDiceLoss(nn.Module):
         self.dice_weight = float(dice_weight)
         self.normal_fp_loss_weight = float(normal_fp_loss_weight)
         self.normal_fp_topk_ratio = float(normal_fp_topk_ratio)
+        self.deep_supervision_weight = float(deep_supervision_weight)
+        self.deep_supervision_decay = float(deep_supervision_decay)
+        self.boundary_aux_weight = float(boundary_aux_weight)
+        self.boundary_width = max(1, int(boundary_width))
 
         self.dice_loss = DiceLoss(eps=eps)
         
@@ -86,10 +100,7 @@ class BCEDiceLoss(nn.Module):
                 torch.tensor(1.0, dtype=torch.float32),
             )
 
-    def forward(self,logits,target):
-        """
-            总损失 = bce_weight * BCE + dice_weight * Dice
-        """
+    def segmentation_loss(self, logits, target, include_normal_fp=True):
         logits, target = prepare_logits_and_target(logits, target)
         if self.use_pos_weight:
             bce = F.binary_cross_entropy_with_logits(
@@ -108,7 +119,7 @@ class BCEDiceLoss(nn.Module):
         # 加权相加
         total_loss = self.bce_weight * bce + self.dice_weight * dice
 
-        if self.normal_fp_loss_weight > 0.0:
+        if include_normal_fp and self.normal_fp_loss_weight > 0.0:
             empty_target = target.sum(dim=(1, 2, 3)) <= 0.0
             if bool(empty_target.any()):
                 normal_probs = torch.sigmoid(logits[empty_target]).flatten(start_dim=1)
@@ -122,3 +133,44 @@ class BCEDiceLoss(nn.Module):
 
         return total_loss
 
+    def boundary_target(self, target):
+        _, target = prepare_logits_and_target(target, target)
+        kernel_size = self.boundary_width
+        padding = kernel_size // 2
+        dilated = F.max_pool2d(target, kernel_size=kernel_size, stride=1, padding=padding)
+        eroded = -F.max_pool2d(-target, kernel_size=kernel_size, stride=1, padding=padding)
+        return (dilated - eroded > 0.0).float()
+
+    def forward(self,logits,target):
+        """
+            总损失 = bce_weight * BCE + dice_weight * Dice
+        """
+        if isinstance(logits, dict):
+            output = logits
+            main_logits = output["logits"]
+        else:
+            output = {}
+            main_logits = logits
+
+        total_loss = self.segmentation_loss(main_logits, target, include_normal_fp=True)
+
+        aux_logits = output.get("aux_logits", [])
+        if self.deep_supervision_weight > 0.0 and len(aux_logits) > 0:
+            aux_loss = 0.0
+            total_weight = 0.0
+            for index, aux_logit in enumerate(aux_logits):
+                weight = self.deep_supervision_decay ** index
+                aux_loss = aux_loss + weight * self.segmentation_loss(aux_logit, target, include_normal_fp=False)
+                total_weight += weight
+            if total_weight > 0.0:
+                total_loss = total_loss + self.deep_supervision_weight * (aux_loss / total_weight)
+
+        boundary_logits = output.get("boundary_logits")
+        if self.boundary_aux_weight > 0.0 and boundary_logits is not None:
+            _, prepared_target = prepare_logits_and_target(main_logits, target)
+            boundary_target = self.boundary_target(prepared_target)
+            boundary_logits, boundary_target = prepare_logits_and_target(boundary_logits, boundary_target)
+            boundary_loss = F.binary_cross_entropy_with_logits(boundary_logits, boundary_target)
+            total_loss = total_loss + self.boundary_aux_weight * boundary_loss
+
+        return total_loss

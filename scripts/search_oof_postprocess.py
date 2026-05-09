@@ -100,7 +100,11 @@ def predict_fold(cfg, fold, device):
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(pretrained=False)
+    model = build_model(
+        pretrained=False,
+        deep_supervision=bool(fold_cfg.get("deep_supervision_enable", False)),
+        boundary_aux=bool(fold_cfg.get("boundary_aux_enable", False)),
+    )
     model.to(device)
 
     save_dir = resolve_path(fold_cfg["save_dir"])

@@ -137,7 +137,11 @@ def main():
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(pretrained=False)
+    model = build_model(
+        pretrained=False,
+        deep_supervision=bool(cfg.get("deep_supervision_enable", False)),
+        boundary_aux=bool(cfg.get("boundary_aux_enable", False)),
+    )
     model.to(device)
 
     save_dir = resolve_path(cfg["save_dir"])

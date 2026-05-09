@@ -4,6 +4,7 @@ from pathlib import Path
 
 import torch
 
+from src.losses import get_primary_logits
 from src.utils import ensure_dir
 
 try:
@@ -111,9 +112,9 @@ def save_checkpoint(path, state):
     torch.save(state, path)
 
 
-def load_checkpoint(path, model, optimizer=None, scheduler=None, map_location="cpu"):
+def load_checkpoint(path, model, optimizer=None, scheduler=None, map_location="cpu", strict=True):
     checkpoint = torch.load(path, map_location=map_location)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(checkpoint["model_state_dict"], strict=bool(strict))
 
     if optimizer is not None and "optimizer_state_dict" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -281,7 +282,7 @@ def predict_on_loader(model, loader, device, progress_desc=None, amp_enabled=Tru
             for batch in progress:
                 images, masks = batch_to_device(batch, device)
                 with amp_autocast(device, enabled=use_amp):
-                    logits = model(images)
+                    logits = get_primary_logits(model(images))
                 batch_size = logits.shape[0]
 
                 for index in range(batch_size):
@@ -329,8 +330,9 @@ def validate_stage1(model, loader, criterion, device, threshold=0.5, progress_de
                 batch_size = images.shape[0]
 
                 with amp_autocast(device, enabled=use_amp):
-                    logits = model(images)
-                    loss = criterion(logits, masks)
+                    output = model(images)
+                    loss = criterion(output, masks)
+                    logits = get_primary_logits(output)
                 dice_info = compute_binary_dice_per_sample_from_logits(logits, masks, threshold=threshold)
 
                 total_loss += float(loss.detach()) * batch_size

@@ -201,6 +201,8 @@ def build_stage1_replay_rows(
     dataset = PatchDataset(
         base_patch_rows,
         transform=build_stage1_eval_transform(int(cfg.get("patch_out_size", 384)), cfg=cfg),
+        cache_enabled=bool(cfg.get("patch_worker_cache", False)),
+        cache_max_items=int(cfg.get("patch_worker_cache_max_items", 0)),
     )
     loader = _build_loader(dataset, batch_size=batch_size, num_workers=num_workers, device=device, seed=seed)
     predictions = predict_on_loader(model, loader, device, progress_desc=f"Replay scan {source_epoch}")

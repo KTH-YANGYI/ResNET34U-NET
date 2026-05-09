@@ -419,11 +419,22 @@ def main():
 
     val_loader = build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device)
 
-    model = build_model(pretrained=bool(cfg.get("pretrained", False)))
+    deep_supervision_enabled = bool(cfg.get("deep_supervision_enable", False))
+    boundary_aux_enabled = bool(cfg.get("boundary_aux_enable", False))
+    model = build_model(
+        pretrained=bool(cfg.get("pretrained", False)),
+        deep_supervision=deep_supervision_enabled,
+        boundary_aux=boundary_aux_enabled,
+    )
     model.to(device)
 
     stage1_checkpoint_path = resolve_path(cfg["stage1_checkpoint"])
-    load_checkpoint(stage1_checkpoint_path, model, map_location=device)
+    load_checkpoint(
+        stage1_checkpoint_path,
+        model,
+        map_location=device,
+        strict=not (deep_supervision_enabled or boundary_aux_enabled),
+    )
 
     criterion = BCEDiceLoss(
         bce_weight=float(cfg.get("bce_weight", 0.5)),
@@ -431,6 +442,10 @@ def main():
         pos_weight=float(cfg.get("pos_weight", 12.0)),
         normal_fp_loss_weight=float(cfg.get("normal_fp_loss_weight", 0.0)),
         normal_fp_topk_ratio=float(cfg.get("normal_fp_topk_ratio", 1.0)),
+        deep_supervision_weight=float(cfg.get("deep_supervision_weight", 0.0)),
+        deep_supervision_decay=float(cfg.get("deep_supervision_decay", 0.5)),
+        boundary_aux_weight=float(cfg.get("boundary_aux_weight", 0.0)),
+        boundary_width=int(cfg.get("boundary_width", 3)),
     )
 
     optimizer = build_optimizer(model, cfg)
