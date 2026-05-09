@@ -220,8 +220,12 @@ bash scripts/run_p0_a40_second_batch.sh
 After hard-normal replay logs look stable, include the `normal_fp_loss_weight` variants:
 
 ```bash
-RUN_NORMAL_FP=1 bash scripts/run_p0_a40_second_batch.sh
+bash scripts/run_p0_a40_normal_fp_loss_ablation.sh
 ```
+
+Each normal-FP-loss variant writes its own `EXPERIMENT.md` under its output
+directory so the experiment purpose, config, logs, and pooled OOF result are
+easy to review later.
 
 Useful variants:
 
