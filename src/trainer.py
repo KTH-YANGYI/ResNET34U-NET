@@ -267,9 +267,10 @@ def extract_batch_value(batch, key, index):
     return value
 
 
-def predict_on_loader(model, loader, device, progress_desc=None):
+def predict_on_loader(model, loader, device, progress_desc=None, amp_enabled=True):
     model.eval()
     results = []
+    use_amp = bool(amp_enabled) and device.type == "cuda"
 
     progress = build_progress(loader, desc=progress_desc, leave=False)
 
@@ -277,7 +278,8 @@ def predict_on_loader(model, loader, device, progress_desc=None):
         try:
             for batch in progress:
                 images, masks = batch_to_device(batch, device)
-                logits = model(images)
+                with amp_autocast(device, enabled=use_amp):
+                    logits = model(images)
                 batch_size = logits.shape[0]
 
                 for index in range(batch_size):
@@ -308,12 +310,13 @@ def predict_on_loader(model, loader, device, progress_desc=None):
     return results
 
 
-def validate_stage1(model, loader, criterion, device, threshold=0.5, progress_desc=None):
+def validate_stage1(model, loader, criterion, device, threshold=0.5, progress_desc=None, amp_enabled=True):
     model.eval()
 
     total_loss = 0.0
     total_samples = 0
     per_patch_rows = []
+    use_amp = bool(amp_enabled) and device.type == "cuda"
 
     progress = build_progress(loader, desc=progress_desc, leave=False)
 
@@ -323,8 +326,9 @@ def validate_stage1(model, loader, criterion, device, threshold=0.5, progress_de
                 images, masks = batch_to_device(batch, device)
                 batch_size = images.shape[0]
 
-                logits = model(images)
-                loss = criterion(logits, masks)
+                with amp_autocast(device, enabled=use_amp):
+                    logits = model(images)
+                    loss = criterion(logits, masks)
                 dice_info = compute_binary_dice_per_sample_from_logits(logits, masks, threshold=threshold)
 
                 total_loss += float(loss.detach()) * batch_size
@@ -406,10 +410,11 @@ def validate_stage2(
     target_normal_fpr=0.10,
     lambda_fpr_penalty=2.0,
     progress_desc=None,
+    amp_enabled=True,
 ):
     from src.metrics import compute_stage2_score, evaluate_prob_maps, logits_to_probs, search_postprocess_params
 
-    predictions = predict_on_loader(model, loader, device, progress_desc=progress_desc)
+    predictions = predict_on_loader(model, loader, device, progress_desc=progress_desc, amp_enabled=amp_enabled)
 
     if len(predictions) == 0:
         raise ValueError("Validation loader is empty")

@@ -468,7 +468,4 @@ def resolve_hard_normal_count(defect_count, random_normal_count, cfg):
     if ratio <= 0.0:
         return 0
 
-    if ratio >= 1.0:
-        return int(random_normal_count)
-
-    return int(round(float(random_normal_count) * ratio / max(1e-6, 1.0 - ratio)))
+    return int(round(float(random_normal_count) * min(ratio, 1.0)))

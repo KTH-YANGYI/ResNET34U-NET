@@ -55,10 +55,20 @@ class DiceLoss(nn.Module):
         return loss.mean()
     
 class BCEDiceLoss(nn.Module):
-    def __init__(self, bce_weight=0.5, dice_weight=0.5, pos_weight=None, eps=1e-6):
+    def __init__(
+        self,
+        bce_weight=0.5,
+        dice_weight=0.5,
+        pos_weight=None,
+        normal_fp_loss_weight=0.0,
+        normal_fp_topk_ratio=1.0,
+        eps=1e-6,
+    ):
         super().__init__()
         self.bce_weight = float(bce_weight)
         self.dice_weight = float(dice_weight)
+        self.normal_fp_loss_weight = float(normal_fp_loss_weight)
+        self.normal_fp_topk_ratio = float(normal_fp_topk_ratio)
 
         self.dice_loss = DiceLoss(eps=eps)
         
@@ -98,6 +108,17 @@ class BCEDiceLoss(nn.Module):
         # 加权相加
         total_loss = self.bce_weight * bce + self.dice_weight * dice
 
-        return total_loss
+        if self.normal_fp_loss_weight > 0.0:
+            empty_target = target.sum(dim=(1, 2, 3)) <= 0.0
+            if bool(empty_target.any()):
+                normal_probs = torch.sigmoid(logits[empty_target]).flatten(start_dim=1)
+                topk_ratio = min(max(self.normal_fp_topk_ratio, 0.0), 1.0)
+                if topk_ratio <= 0.0:
+                    normal_fp_loss = normal_probs.mean()
+                else:
+                    topk_count = max(1, int(round(normal_probs.shape[1] * topk_ratio)))
+                    normal_fp_loss = normal_probs.topk(k=topk_count, dim=1).values.mean()
+                total_loss = total_loss + self.normal_fp_loss_weight * normal_fp_loss
 
+        return total_loss
 

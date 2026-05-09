@@ -201,6 +201,8 @@ def save_history_csv(path, history_rows):
         "positive_patch_recall",
         "negative_patch_fpr",
         "stage1_score",
+        "stage1_target_negative_fpr",
+        "stage1_negative_fpr_penalty",
         "train_patch_count",
         "replay_patch_count",
         "train_family_counts_json",
@@ -212,23 +214,39 @@ def save_history_csv(path, history_rows):
     write_csv_rows(path, history_rows, fieldnames)
 
 
+def compute_stage1_score(val_stats, cfg):
+    target_negative_fpr = float(cfg.get("stage1_target_negative_fpr", 0.20))
+    negative_fpr_penalty = float(cfg.get("stage1_negative_fpr_penalty", 0.5))
+    negative_fpr = float(val_stats["negative_patch_fpr"])
+    excess_negative_fpr = max(0.0, negative_fpr - target_negative_fpr)
+    return float(val_stats["patch_dice_pos_only"]) - negative_fpr_penalty * excess_negative_fpr
+
+
 def stage1_result_is_better(current_result, best_result):
     if best_result is None:
         return True
 
-    if float(current_result["patch_dice_pos_only"]) > float(best_result["patch_dice_pos_only"]):
+    if float(current_result["stage1_score"]) > float(best_result["stage1_score"]):
         return True
 
     if (
-        float(current_result["patch_dice_pos_only"]) == float(best_result["patch_dice_pos_only"])
+        float(current_result["stage1_score"]) == float(best_result["stage1_score"])
         and float(current_result["negative_patch_fpr"]) < float(best_result["negative_patch_fpr"])
     ):
         return True
 
     if (
-        float(current_result["patch_dice_pos_only"]) == float(best_result["patch_dice_pos_only"])
+        float(current_result["stage1_score"]) == float(best_result["stage1_score"])
         and float(current_result["negative_patch_fpr"]) == float(best_result["negative_patch_fpr"])
         and float(current_result["positive_patch_recall"]) > float(best_result["positive_patch_recall"])
+    ):
+        return True
+
+    if (
+        float(current_result["stage1_score"]) == float(best_result["stage1_score"])
+        and float(current_result["negative_patch_fpr"]) == float(best_result["negative_patch_fpr"])
+        and float(current_result["positive_patch_recall"]) == float(best_result["positive_patch_recall"])
+        and float(current_result["patch_dice_pos_only"]) > float(best_result["patch_dice_pos_only"])
     ):
         return True
 
@@ -344,21 +362,30 @@ def main():
             device,
             threshold=eval_threshold,
             progress_desc=f"Val {epoch}/{epochs}",
+            amp_enabled=bool(cfg.get("amp", True)),
         )
 
-        stage1_score = float(val_stats["patch_dice_pos_only"])
+        stage1_score = compute_stage1_score(val_stats, cfg)
+        target_negative_fpr = float(cfg.get("stage1_target_negative_fpr", 0.20))
+        negative_fpr_penalty = float(cfg.get("stage1_negative_fpr_penalty", 0.5))
         scheduler.step(stage1_score)
         should_stop, _ = early_stopper.step(stage1_score)
 
-        current_is_best = stage1_result_is_better(val_stats, best_stage1_result)
+        current_stage1_result = {
+            "patch_dice_all": float(val_stats["patch_dice_all"]),
+            "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
+            "positive_patch_recall": float(val_stats["positive_patch_recall"]),
+            "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
+            "stage1_score": float(stage1_score),
+            "stage1_target_negative_fpr": target_negative_fpr,
+            "stage1_negative_fpr_penalty": negative_fpr_penalty,
+            "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
+            "count_by_type": dict(val_stats["count_by_type"]),
+        }
+        current_is_best = stage1_result_is_better(current_stage1_result, best_stage1_result)
         if current_is_best:
             best_stage1_result = {
-                "patch_dice_all": float(val_stats["patch_dice_all"]),
-                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
-                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
-                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
-                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
-                "count_by_type": dict(val_stats["count_by_type"]),
+                **current_stage1_result,
                 "replay_summary": replay_summary,
             }
 
@@ -373,6 +400,8 @@ def main():
                 "positive_patch_recall": val_stats["positive_patch_recall"],
                 "negative_patch_fpr": val_stats["negative_patch_fpr"],
                 "stage1_score": stage1_score,
+                "stage1_target_negative_fpr": target_negative_fpr,
+                "stage1_negative_fpr_penalty": negative_fpr_penalty,
                 "train_patch_count": train_patch_count,
                 "replay_patch_count": len(replay_rows),
                 "train_family_counts_json": json.dumps(train_family_counts, ensure_ascii=False, sort_keys=True),
@@ -395,12 +424,7 @@ def main():
             "best_stage1_result": best_stage1_result,
             "replay_summary": replay_summary,
             "current_val_stats": {
-                "patch_dice_all": float(val_stats["patch_dice_all"]),
-                "patch_dice_pos_only": float(val_stats["patch_dice_pos_only"]),
-                "positive_patch_recall": float(val_stats["positive_patch_recall"]),
-                "negative_patch_fpr": float(val_stats["negative_patch_fpr"]),
-                "patch_dice_by_type": dict(val_stats["patch_dice_by_type"]),
-                "count_by_type": dict(val_stats["count_by_type"]),
+                **current_stage1_result,
             },
         }
 
@@ -439,6 +463,7 @@ def main():
             f"patch_dice_pos_only={val_stats['patch_dice_pos_only']:.6f} | "
             f"positive_recall={val_stats['positive_patch_recall']:.6f} | "
             f"negative_fpr={val_stats['negative_patch_fpr']:.6f} | "
+            f"stage1_score={stage1_score:.6f} | "
             f"lr_encoder={train_stats['lr_encoder']:.6e} | "
             f"lr_decoder={train_stats['lr_decoder']:.6e}"
         )

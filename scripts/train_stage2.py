@@ -103,6 +103,48 @@ def count_rows_by_device(rows):
     return dict(sorted(counter.items(), key=lambda item: item[0]))
 
 
+def stage2_row_key(row):
+    return (
+        str(row.get("sample_id", "")).strip(),
+        str(row.get("image_name", "")).strip(),
+        str(row.get("image_path", "")).strip(),
+    )
+
+
+def sample_hard_normal_rows(hard_normal_rows, k, seed):
+    if int(k) <= 0 or len(hard_normal_rows) == 0:
+        return []
+
+    selected_rows = sample_rows_with_frame_gap(
+        hard_normal_rows,
+        k=int(k),
+        seed=seed,
+        min_frame_gap=0,
+        score_key="hard_score",
+        descending=True,
+    )
+
+    if len(selected_rows) >= int(k):
+        return selected_rows
+
+    refill_pool = selected_rows or sorted(
+        list(hard_normal_rows),
+        key=lambda row: (float(row.get("hard_score", 0.0)), stage2_row_key(row)),
+        reverse=True,
+    )
+    rng = random.Random(seed + 1009)
+
+    while len(selected_rows) < int(k) and len(refill_pool) > 0:
+        shuffled_pool = list(refill_pool)
+        rng.shuffle(shuffled_pool)
+        for row in shuffled_pool:
+            selected_rows.append(row)
+            if len(selected_rows) >= int(k):
+                break
+
+    return selected_rows
+
+
 def should_refresh_hard_normal(epoch, cfg):
     if not bool(cfg.get("use_hard_normal_replay", False)):
         return False
@@ -125,53 +167,48 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
     hard_normal_rows = list(hard_normal_rows)
 
     random_normal_k_factor = float(cfg.get("random_normal_k_factor", 1.0))
-    target_random_normal_count = int(round(len(defect_train_rows) * random_normal_k_factor))
-    sampled_normal_rows = sample_normal_rows(
-        normal_rows=normal_train_rows,
-        k=target_random_normal_count,
-        seed=epoch_seed,
-    )
+    target_normal_budget_count = int(round(len(defect_train_rows) * random_normal_k_factor))
 
-    if bool(cfg.get("use_hard_normal_replay", False)):
-        target_hard_normal_count = resolve_hard_normal_count(
-            defect_count=len(defect_train_rows),
-            random_normal_count=target_random_normal_count,
-            cfg=cfg,
+    if bool(cfg.get("use_hard_normal_replay", False)) and len(hard_normal_rows) > 0:
+        target_hard_normal_count = min(
+            target_normal_budget_count,
+            resolve_hard_normal_count(
+                defect_count=len(defect_train_rows),
+                random_normal_count=target_normal_budget_count,
+                cfg=cfg,
+            ),
         )
     else:
         target_hard_normal_count = 0
-    sampled_hard_normal_rows = sample_rows_with_frame_gap(
-        hard_normal_rows,
+
+    target_random_normal_count = max(0, target_normal_budget_count - target_hard_normal_count)
+    sampled_hard_normal_rows = sample_hard_normal_rows(
+        hard_normal_rows=hard_normal_rows,
         k=target_hard_normal_count,
         seed=epoch_seed + 97,
-        min_frame_gap=0,
-        score_key="hard_score",
-        descending=True,
     )
-    random_normal_keys = {
-        (
-            str(row.get("sample_id", "")).strip(),
-            str(row.get("image_name", "")).strip(),
-            str(row.get("image_path", "")).strip(),
-        )
-        for row in sampled_normal_rows
-    }
-    sampled_hard_normal_rows = [
+    hard_normal_keys = {stage2_row_key(row) for row in sampled_hard_normal_rows}
+    random_candidate_rows = [
         row
-        for row in sampled_hard_normal_rows
-        if (
-            str(row.get("sample_id", "")).strip(),
-            str(row.get("image_name", "")).strip(),
-            str(row.get("image_path", "")).strip(),
-        )
-        not in random_normal_keys
+        for row in normal_train_rows
+        if stage2_row_key(row) not in hard_normal_keys
     ]
+    if len(random_candidate_rows) < target_random_normal_count:
+        random_candidate_rows = normal_train_rows
+    sampled_normal_rows = sample_normal_rows(
+        normal_rows=random_candidate_rows,
+        k=target_random_normal_count,
+        seed=epoch_seed,
+    )
 
     epoch_rows = defect_train_rows + sampled_normal_rows + sampled_hard_normal_rows
 
     rng = random.Random(epoch_seed)
     rng.shuffle(epoch_rows)
     return epoch_rows, {
+        "normal_budget_count": target_normal_budget_count,
+        "target_random_normal_count": target_random_normal_count,
+        "target_hard_normal_count": target_hard_normal_count,
         "random_normal_count": len(sampled_normal_rows),
         "hard_normal_count": len(sampled_hard_normal_rows),
         "hard_pool_size": len(hard_normal_rows),
@@ -287,11 +324,22 @@ def save_history_csv(path, history_rows):
         "defect_iou",
         "defect_image_recall",
         "normal_fpr",
+        "normal_count",
+        "normal_fp_count",
+        "normal_fp_pixel_sum",
         "normal_fp_pixel_mean",
+        "normal_fp_pixel_median",
+        "normal_fp_pixel_p95",
         "normal_largest_fp_area_mean",
+        "normal_largest_fp_area_median",
+        "normal_largest_fp_area_p95",
+        "normal_largest_fp_area_max",
         "threshold",
         "min_area",
         "stage2_score",
+        "normal_budget_count",
+        "target_random_normal_count",
+        "target_hard_normal_count",
         "random_normal_count",
         "hard_normal_count",
         "hard_pool_size",
@@ -300,6 +348,37 @@ def save_history_csv(path, history_rows):
         "lr_decoder",
     ]
     write_csv_rows(path, history_rows, fieldnames)
+
+
+STAGE2_SUMMARY_KEYS = [
+    "defect_dice",
+    "defect_iou",
+    "defect_image_recall",
+    "normal_fpr",
+    "normal_count",
+    "normal_fp_count",
+    "normal_fp_pixel_sum",
+    "normal_fp_pixel_mean",
+    "normal_fp_pixel_median",
+    "normal_fp_pixel_p95",
+    "normal_largest_fp_area_mean",
+    "normal_largest_fp_area_median",
+    "normal_largest_fp_area_p95",
+    "normal_largest_fp_area_max",
+    "threshold",
+    "min_area",
+    "stage2_score",
+]
+
+
+def summarize_stage2_result(val_stats):
+    summary = {}
+    for key in STAGE2_SUMMARY_KEYS:
+        if key in {"normal_count", "normal_fp_count", "min_area"}:
+            summary[key] = int(val_stats[key])
+        else:
+            summary[key] = float(val_stats[key])
+    return summary
 
 
 def main():
@@ -327,6 +406,8 @@ def main():
         bce_weight=float(cfg.get("bce_weight", 0.5)),
         dice_weight=float(cfg.get("dice_weight", 0.5)),
         pos_weight=float(cfg.get("pos_weight", 12.0)),
+        normal_fp_loss_weight=float(cfg.get("normal_fp_loss_weight", 0.0)),
+        normal_fp_topk_ratio=float(cfg.get("normal_fp_topk_ratio", 1.0)),
     )
 
     optimizer = build_optimizer(model, cfg)
@@ -399,6 +480,7 @@ def main():
                 target_normal_fpr=target_normal_fpr,
                 lambda_fpr_penalty=lambda_fpr_penalty,
                 progress_desc=f"Val {epoch}/{epochs}",
+                amp_enabled=bool(cfg.get("amp", True)),
             )
 
             stage2_score = float(val_stats["stage2_score"])
@@ -413,15 +495,7 @@ def main():
 
             if current_is_best:
                 best_stage2_result = {
-                    "defect_dice": float(val_stats["defect_dice"]),
-                    "defect_iou": float(val_stats["defect_iou"]),
-                    "defect_image_recall": float(val_stats["defect_image_recall"]),
-                    "normal_fpr": float(val_stats["normal_fpr"]),
-                    "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
-                    "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
-                    "threshold": float(val_stats["threshold"]),
-                    "min_area": int(val_stats["min_area"]),
-                    "stage2_score": float(val_stats["stage2_score"]),
+                    **summarize_stage2_result(val_stats),
                     "hard_normal_summary": hard_normal_summary,
                 }
 
@@ -433,11 +507,22 @@ def main():
                     "defect_iou": val_stats["defect_iou"],
                     "defect_image_recall": val_stats["defect_image_recall"],
                     "normal_fpr": val_stats["normal_fpr"],
+                    "normal_count": val_stats["normal_count"],
+                    "normal_fp_count": val_stats["normal_fp_count"],
+                    "normal_fp_pixel_sum": val_stats["normal_fp_pixel_sum"],
                     "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
+                    "normal_fp_pixel_median": val_stats["normal_fp_pixel_median"],
+                    "normal_fp_pixel_p95": val_stats["normal_fp_pixel_p95"],
                     "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
+                    "normal_largest_fp_area_median": val_stats["normal_largest_fp_area_median"],
+                    "normal_largest_fp_area_p95": val_stats["normal_largest_fp_area_p95"],
+                    "normal_largest_fp_area_max": val_stats["normal_largest_fp_area_max"],
                     "threshold": val_stats["threshold"],
                     "min_area": val_stats["min_area"],
                     "stage2_score": val_stats["stage2_score"],
+                    "normal_budget_count": epoch_sampling_summary["normal_budget_count"],
+                    "target_random_normal_count": epoch_sampling_summary["target_random_normal_count"],
+                    "target_hard_normal_count": epoch_sampling_summary["target_hard_normal_count"],
                     "random_normal_count": epoch_sampling_summary["random_normal_count"],
                     "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
                     "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
@@ -458,17 +543,7 @@ def main():
                 "early_stopper_state_dict": early_stopper.state_dict(),
                 "best_stage2_result": best_stage2_result,
                 "hard_normal_summary": hard_normal_summary,
-                "current_val_stats": {
-                    "defect_dice": float(val_stats["defect_dice"]),
-                    "defect_iou": float(val_stats["defect_iou"]),
-                    "defect_image_recall": float(val_stats["defect_image_recall"]),
-                    "normal_fpr": float(val_stats["normal_fpr"]),
-                    "normal_fp_pixel_mean": float(val_stats["normal_fp_pixel_mean"]),
-                    "normal_largest_fp_area_mean": float(val_stats["normal_largest_fp_area_mean"]),
-                    "threshold": float(val_stats["threshold"]),
-                    "min_area": int(val_stats["min_area"]),
-                    "stage2_score": float(val_stats["stage2_score"]),
-                },
+                "current_val_stats": summarize_stage2_result(val_stats),
             }
 
             if scaler is not None:
@@ -489,7 +564,7 @@ def main():
                     threshold=float(val_stats["threshold"]),
                     min_area=int(val_stats["min_area"]),
                     defect_count=len(defect_train_rows),
-                    random_normal_count=epoch_sampling_summary["random_normal_count"],
+                    random_normal_count=epoch_sampling_summary["normal_budget_count"],
                 )
                 save_stage2_hard_normal_outputs(save_dir, epoch, hard_normal_rows, hard_normal_summary)
             else:
@@ -497,6 +572,15 @@ def main():
                     **hard_normal_summary,
                     "pool_size": len(hard_normal_rows),
                 }
+
+            if (
+                int(epoch_sampling_summary["hard_pool_size"]) > 0
+                and int(epoch_sampling_summary["target_hard_normal_count"]) > 0
+                and int(epoch_sampling_summary["hard_normal_count"]) == 0
+            ):
+                print(
+                    "Warning: hard normal pool is non-empty but no hard normal rows were sampled for this epoch."
+                )
 
             print(
                 f"epoch {epoch}/{epochs} | "
@@ -508,6 +592,7 @@ def main():
                 f"defect_iou={val_stats['defect_iou']:.6f} | "
                 f"defect_recall={val_stats['defect_image_recall']:.6f} | "
                 f"normal_fpr={val_stats['normal_fpr']:.6f} | "
+                f"normal_fp={int(val_stats['normal_fp_count'])}/{int(val_stats['normal_count'])} | "
                 f"thr={val_stats['threshold']:.2f} | "
                 f"min_area={val_stats['min_area']} | "
                 f"stage2_score={val_stats['stage2_score']:.6f} | "

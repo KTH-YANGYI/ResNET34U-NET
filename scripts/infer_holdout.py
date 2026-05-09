@@ -87,6 +87,27 @@ def load_holdout_rows(cfg):
     return read_csv_rows(resolve_path("manifests/defect_holdout_unlabeled.csv"))
 
 
+def load_postprocess_params(cfg, save_dir):
+    global_path = resolve_path(cfg.get("global_postprocess_path", "outputs/stage2/oof_global_postprocess.json"))
+    if global_path.exists():
+        metrics = read_json(global_path)
+        return {
+            "threshold": float(metrics["threshold"]),
+            "min_area": int(metrics.get("min_area", 0)),
+            "postprocess_source": "global_oof",
+            "postprocess_path": str(global_path),
+        }
+
+    fold_metrics_path = save_dir / "val_metrics.json"
+    metrics = read_json(fold_metrics_path)
+    return {
+        "threshold": float(metrics["threshold"]),
+        "min_area": int(metrics.get("min_area", 0)),
+        "postprocess_source": "fold_val",
+        "postprocess_path": str(fold_metrics_path),
+    }
+
+
 def main():
     args = parse_args()
 
@@ -123,9 +144,9 @@ def main():
     checkpoint_path = save_dir / "best_stage2.pt"
     load_checkpoint(checkpoint_path, model, map_location=device)
 
-    val_metrics = read_json(save_dir / "val_metrics.json")
-    threshold = float(val_metrics["threshold"])
-    min_area = int(val_metrics.get("min_area", 0))
+    postprocess_params = load_postprocess_params(cfg, save_dir)
+    threshold = float(postprocess_params["threshold"])
+    min_area = int(postprocess_params["min_area"])
 
     predictions = predict_on_loader(model, loader, device)
 
@@ -163,6 +184,8 @@ def main():
                 "is_labeled": str(to_bool(item.get("is_labeled", False))),
                 "threshold": threshold,
                 "min_area": min_area,
+                "postprocess_source": postprocess_params["postprocess_source"],
+                "postprocess_path": postprocess_params["postprocess_path"],
                 "max_prob": float(np.max(prob_map)),
                 "raw_positive_pixels": int(raw_binary_mask.sum()),
                 "post_positive_pixels": int(post_binary_mask.sum()),
@@ -183,6 +206,8 @@ def main():
             "is_labeled",
             "threshold",
             "min_area",
+            "postprocess_source",
+            "postprocess_path",
             "max_prob",
             "raw_positive_pixels",
             "post_positive_pixels",
@@ -195,6 +220,8 @@ def main():
             "holdout_count": len(predictions),
             "threshold": threshold,
             "min_area": min_area,
+            "postprocess_source": postprocess_params["postprocess_source"],
+            "postprocess_path": postprocess_params["postprocess_path"],
         }
     )
 

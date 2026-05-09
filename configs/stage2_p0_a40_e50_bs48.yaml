@@ -4,8 +4,8 @@ fold: 0
 
 image_size: 640
 samples_path: manifests/samples.csv
-batch_size: 24
-epochs: 25
+batch_size: 48
+epochs: 50
 
 encoder_lr: 2.0e-5
 decoder_lr: 1.0e-4
@@ -18,11 +18,11 @@ normal_fp_loss_weight: 0.0
 normal_fp_topk_ratio: 0.10
 
 amp: true
-early_stop_patience: 12
+early_stop_patience: 16
 early_stop_min_delta: 0.0
 
 lr_factor: 0.5
-lr_patience: 3
+lr_patience: 4
 min_lr: 1.0e-7
 
 num_workers: 8
@@ -56,5 +56,6 @@ hard_normal_warmup_epochs: 2
 hard_normal_refresh_every: 2
 hard_normal_pool_factor: 3.0
 
-stage1_checkpoint_template: outputs/stage1/fold{fold}/best_stage1.pt
-save_dir_template: outputs/stage2/fold{fold}
+stage1_checkpoint_template: outputs/experiments/p0_a40_20260508/stage1/fold{fold}/best_stage1.pt
+save_dir_template: outputs/experiments/p0_a40_e50_bs48_20260509/stage2/fold{fold}
+global_postprocess_path: outputs/experiments/p0_a40_e50_bs48_20260509/stage2/oof_global_postprocess.json

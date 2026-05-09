@@ -225,6 +225,30 @@ def compare_stage2_results(current_result, best_result, target_normal_fpr=0.10):
     return False
 
 
+def _mean_or_zero(values):
+    if len(values) == 0:
+        return 0.0
+    return float(np.mean(values))
+
+
+def _median_or_zero(values):
+    if len(values) == 0:
+        return 0.0
+    return float(np.median(values))
+
+
+def _p95_or_zero(values):
+    if len(values) == 0:
+        return 0.0
+    return float(np.percentile(values, 95))
+
+
+def _max_or_zero(values):
+    if len(values) == 0:
+        return 0.0
+    return float(np.max(values))
+
+
 def summarize_metrics(per_image_rows):
     defect_dice_values = []
     defect_iou_values = []
@@ -244,30 +268,51 @@ def summarize_metrics(per_image_rows):
             normal_largest_fp_areas.append(float(row["largest_fp_component_area"]))
 
     if len(defect_dice_values) > 0:
-        defect_dice = float(np.mean(defect_dice_values))
-        defect_iou = float(np.mean(defect_iou_values))
-        defect_image_recall = float(np.mean(defect_recall_hits))
+        defect_dice = _mean_or_zero(defect_dice_values)
+        defect_iou = _mean_or_zero(defect_iou_values)
+        defect_image_recall = _mean_or_zero(defect_recall_hits)
     else:
         defect_dice = 0.0
         defect_iou = 0.0
         defect_image_recall = 0.0
 
     if len(normal_false_positive_hits) > 0:
-        normal_fpr = float(np.mean(normal_false_positive_hits))
-        normal_fp_pixel_mean = float(np.mean(normal_fp_pixels))
-        normal_largest_fp_area_mean = float(np.mean(normal_largest_fp_areas))
+        normal_fpr = _mean_or_zero(normal_false_positive_hits)
+        normal_fp_count = int(sum(1 for value in normal_false_positive_hits if float(value) > 0.0))
+        normal_fp_pixel_sum = float(np.sum(normal_fp_pixels))
+        normal_fp_pixel_mean = _mean_or_zero(normal_fp_pixels)
+        normal_fp_pixel_median = _median_or_zero(normal_fp_pixels)
+        normal_fp_pixel_p95 = _p95_or_zero(normal_fp_pixels)
+        normal_largest_fp_area_mean = _mean_or_zero(normal_largest_fp_areas)
+        normal_largest_fp_area_median = _median_or_zero(normal_largest_fp_areas)
+        normal_largest_fp_area_p95 = _p95_or_zero(normal_largest_fp_areas)
+        normal_largest_fp_area_max = _max_or_zero(normal_largest_fp_areas)
     else:
         normal_fpr = 0.0
+        normal_fp_count = 0
+        normal_fp_pixel_sum = 0.0
         normal_fp_pixel_mean = 0.0
+        normal_fp_pixel_median = 0.0
+        normal_fp_pixel_p95 = 0.0
         normal_largest_fp_area_mean = 0.0
+        normal_largest_fp_area_median = 0.0
+        normal_largest_fp_area_p95 = 0.0
+        normal_largest_fp_area_max = 0.0
 
     return {
         "defect_dice": defect_dice,
         "defect_iou": defect_iou,
         "defect_image_recall": defect_image_recall,
         "normal_fpr": normal_fpr,
+        "normal_fp_count": normal_fp_count,
+        "normal_fp_pixel_sum": normal_fp_pixel_sum,
         "normal_fp_pixel_mean": normal_fp_pixel_mean,
+        "normal_fp_pixel_median": normal_fp_pixel_median,
+        "normal_fp_pixel_p95": normal_fp_pixel_p95,
         "normal_largest_fp_area_mean": normal_largest_fp_area_mean,
+        "normal_largest_fp_area_median": normal_largest_fp_area_median,
+        "normal_largest_fp_area_p95": normal_largest_fp_area_p95,
+        "normal_largest_fp_area_max": normal_largest_fp_area_max,
         "defect_count": len(defect_dice_values),
         "normal_count": len(normal_false_positive_hits),
     }
@@ -381,8 +426,16 @@ def search_postprocess_params(
                     "defect_iou": float(result["defect_iou"]),
                     "defect_image_recall": float(result["defect_image_recall"]),
                     "normal_fpr": float(result["normal_fpr"]),
+                    "normal_count": int(result["normal_count"]),
+                    "normal_fp_count": int(result["normal_fp_count"]),
+                    "normal_fp_pixel_sum": float(result["normal_fp_pixel_sum"]),
                     "normal_fp_pixel_mean": float(result["normal_fp_pixel_mean"]),
+                    "normal_fp_pixel_median": float(result["normal_fp_pixel_median"]),
+                    "normal_fp_pixel_p95": float(result["normal_fp_pixel_p95"]),
                     "normal_largest_fp_area_mean": float(result["normal_largest_fp_area_mean"]),
+                    "normal_largest_fp_area_median": float(result["normal_largest_fp_area_median"]),
+                    "normal_largest_fp_area_p95": float(result["normal_largest_fp_area_p95"]),
+                    "normal_largest_fp_area_max": float(result["normal_largest_fp_area_max"]),
                     "stage2_score": float(result["stage2_score"]),
                 }
             )

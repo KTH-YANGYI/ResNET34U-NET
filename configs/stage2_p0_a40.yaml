@@ -56,5 +56,6 @@ hard_normal_warmup_epochs: 2
 hard_normal_refresh_every: 2
 hard_normal_pool_factor: 3.0
 
-stage1_checkpoint_template: outputs/stage1/fold{fold}/best_stage1.pt
-save_dir_template: outputs/stage2/fold{fold}
+stage1_checkpoint_template: outputs/experiments/p0_a40_20260508/stage1/fold{fold}/best_stage1.pt
+save_dir_template: outputs/experiments/p0_a40_20260508/stage2/fold{fold}
+global_postprocess_path: outputs/experiments/p0_a40_20260508/stage2/oof_global_postprocess.json

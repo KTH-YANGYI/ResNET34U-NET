@@ -164,6 +164,24 @@ outputs/stage2/fold{fold}/
 
 By default, `train_stage2.py` also runs validation export automatically after training because `auto_evaluate_after_train: true` in `configs/stage2.yaml`.
 
+Stage2 hard normal replay keeps the normal-image budget fixed. With `stage2_hard_normal_ratio: 0.40`, about 40% of the normal samples in an epoch come from the mined hard-normal pool once that pool exists, and the rest stay randomly sampled normals.
+
+### Search a global OOF post-process setting
+
+After all folds have Stage2 checkpoints, pool the out-of-fold validation predictions and select one global threshold/min-area pair:
+
+```bash
+python scripts/search_oof_postprocess.py --config configs/stage2.yaml --folds 0,1,2,3
+```
+
+This writes:
+
+- `outputs/stage2/oof_global_postprocess.json`
+- `outputs/stage2/oof_global_postprocess_search.csv`
+- `outputs/stage2/oof_per_image.csv`
+
+`scripts/infer_holdout.py` prefers `global_postprocess_path` when it exists and falls back to each fold's `val_metrics.json` otherwise.
+
 ### Run All Folds
 
 On a Linux training server, this runs preparation, Stage1, and Stage2 for folds `0,1,2,3`:
@@ -176,6 +194,18 @@ Use multiple GPUs to run folds in parallel:
 
 ```bash
 bash scripts/train_all_folds.sh --gpus 0,1,2,3
+```
+
+For the P0 A40 experiment configs, run one fold per GPU and then search pooled OOF post-processing:
+
+```bash
+bash scripts/run_p0_a40_parallel.sh
+```
+
+Outputs go under:
+
+```text
+outputs/experiments/p0_a40_20260508/
 ```
 
 Useful variants:
