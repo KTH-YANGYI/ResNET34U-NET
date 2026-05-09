@@ -1,0 +1,81 @@
+seed: 42
+
+fold: 0
+
+patch_out_size: 384
+batch_size: 128
+epochs: 30
+n_folds: 4
+samples_path: manifests/samples.csv
+
+encoder_lr: 5.0e-5
+decoder_lr: 2.0e-4
+weight_decay: 1.0e-4
+
+bce_weight: 0.5
+dice_weight: 0.5
+pos_weight: 12.0
+
+amp: true
+freeze_encoder_epochs: 3
+early_stop_patience: 12
+early_stop_min_delta: 0.0
+
+lr_factor: 0.5
+lr_patience: 3
+min_lr: 1.0e-7
+
+num_workers: 8
+pretrained: true
+device: cuda
+patch_worker_cache: true
+patch_worker_cache_max_items: 0
+
+use_imagenet_normalize: true
+augment_enable: true
+augment_hflip_p: 0.5
+augment_vflip_p: 0.5
+augment_rotate_deg: 15
+augment_brightness: 0.15
+augment_contrast: 0.15
+augment_gamma: 0.15
+augment_noise_std: 0.02
+augment_blur_p: 0.15
+
+stage1_sampler_mode: balanced
+stage1_positive_ratio: 0.50
+stage1_defect_negative_ratio: 0.25
+stage1_normal_ratio: 0.25
+stage1_use_replay: true
+stage1_replay_ratio: 0.15
+stage1_replay_warmup_epochs: 3
+stage1_replay_refresh_every: 3
+stage1_max_replay_ratio: 0.20
+stage1_eval_threshold: 0.50
+stage1_target_negative_fpr: 0.20
+stage1_negative_fpr_penalty: 0.5
+
+positive_center_crop_sizes: [320, 384, 448]
+positive_shift_crop_sizes: [320, 384, 448]
+positive_context_crop_sizes: [384, 448]
+positive_boundary_crop_sizes: [320, 384, 448]
+negative_crop_sizes: [320, 384, 448]
+
+positive_center_count_per_image: 1
+positive_shift_count_per_image: 2
+positive_context_count_per_image: 1
+positive_boundary_count_per_image: 2
+near_miss_negative_count_per_image: 2
+hard_negative_count_per_image: 3
+near_miss_margin_min: 8
+near_miss_margin_max: 20
+hard_negative_safety_margin: 24
+patch_dedup_iou: 0.70
+max_components_per_image: 3
+max_positive_patches_per_image: 6
+max_attempts_per_patch: 20
+
+train_index_path_template: manifests/stage1_fold{fold}_train_index.csv
+val_index_path_template: manifests/stage1_fold{fold}_val_index.csv
+
+save_dir_template: outputs/experiments/p0_a40_stage1_cache_20260509/stage1/fold{fold}

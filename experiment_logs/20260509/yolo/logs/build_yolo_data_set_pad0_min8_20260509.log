@@ -1,0 +1,22 @@
+{
+  "bbox_padding": 0,
+  "classes": {
+    "broken": 1,
+    "crack": 0
+  },
+  "copy_mode": "symlink",
+  "counts": {
+    "broken_predict_images": 107,
+    "normal_empty_label": 74,
+    "test_boxes": 52,
+    "test_images": 67,
+    "train_boxes": 157,
+    "train_images": 200,
+    "val_boxes": 54,
+    "val_images": 70
+  },
+  "min_area": 8,
+  "output_root": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set_pad0_min8_20260509",
+  "samples_path": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/manifests/samples.csv",
+  "val_fold": "0"
+}

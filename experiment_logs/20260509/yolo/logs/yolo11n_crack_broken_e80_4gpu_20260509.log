@@ -1,0 +1,65 @@
+Ultralytics 8.4.48 🚀 Python-3.11.3 torch-2.1.2 CUDA:0 (NVIDIA A40, 45490MiB)
+                                               CUDA:1 (NVIDIA A40, 45490MiB)
+                                               CUDA:2 (NVIDIA A40, 45490MiB)
+                                               CUDA:3 (NVIDIA A40, 45490MiB)
+[34m[1mengine/trainer: [0magnostic_nms=False, amp=True, angle=1.0, augment=False, auto_augment=randaugment, batch=64, bgr=0.0, box=7.5, cache=False, cfg=None, classes=None, close_mosaic=10, cls=0.5, cls_pw=0.0, compile=False, conf=None, copy_paste=0.0, copy_paste_mode=flip, cos_lr=False, cutmix=0.0, data=/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set/dataset.yaml, degrees=0.0, deterministic=True, device=0,1,2,3, dfl=1.5, dnn=False, dropout=0.0, dynamic=False, embed=None, end2end=None, epochs=80, erasing=0.4, exist_ok=True, fliplr=0.5, flipud=0.0, format=torchscript, fraction=1.0, freeze=None, half=False, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, imgsz=640, int8=False, iou=0.7, keras=False, kobj=1.0, line_width=None, lr0=0.01, lrf=0.01, mask_ratio=4, max_det=300, mixup=0.0, mode=train, model=yolo11n.pt, momentum=0.937, mosaic=1.0, multi_scale=0.0, name=yolo11n_crack_broken_e80_4gpu_20260509, nbs=64, nms=False, opset=None, optimize=False, optimizer=auto, overlap_mask=True, patience=20, perspective=0.0, plots=True, pose=12.0, pretrained=True, profile=False, project=/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/runs, rect=False, resume=False, retina_masks=False, rle=1.0, save=True, save_conf=False, save_crop=False, save_dir=/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/runs/yolo11n_crack_broken_e80_4gpu_20260509, save_frames=False, save_json=False, save_period=-1, save_txt=False, scale=0.5, seed=0, shear=0.0, show=False, show_boxes=True, show_conf=True, show_labels=True, simplify=True, single_cls=False, source=None, split=val, stream_buffer=False, task=detect, time=None, tracker=botsort.yaml, translate=0.1, val=True, verbose=True, vid_stride=1, visualize=False, warmup_bias_lr=0.1, warmup_epochs=3.0, warmup_momentum=0.8, weight_decay=0.0005, workers=4, workspace=None
+Overriding model.yaml nc=80 with nc=2
+
+                   from  n    params  module                                       arguments                     
+  0                  -1  1       464  ultralytics.nn.modules.conv.Conv             [3, 16, 3, 2]                 
+  1                  -1  1      4672  ultralytics.nn.modules.conv.Conv             [16, 32, 3, 2]                
+  2                  -1  1      6640  ultralytics.nn.modules.block.C3k2            [32, 64, 1, False, 0.25]      
+  3                  -1  1     36992  ultralytics.nn.modules.conv.Conv             [64, 64, 3, 2]                
+  4                  -1  1     26080  ultralytics.nn.modules.block.C3k2            [64, 128, 1, False, 0.25]     
+  5                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+  6                  -1  1     87040  ultralytics.nn.modules.block.C3k2            [128, 128, 1, True]           
+  7                  -1  1    295424  ultralytics.nn.modules.conv.Conv             [128, 256, 3, 2]              
+  8                  -1  1    346112  ultralytics.nn.modules.block.C3k2            [256, 256, 1, True]           
+  9                  -1  1    164608  ultralytics.nn.modules.block.SPPF            [256, 256, 5]                 
+ 10                  -1  1    249728  ultralytics.nn.modules.block.C2PSA           [256, 256, 1]                 
+ 11                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 12             [-1, 6]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 13                  -1  1    111296  ultralytics.nn.modules.block.C3k2            [384, 128, 1, False]          
+ 14                  -1  1         0  torch.nn.modules.upsampling.Upsample         [None, 2, 'nearest']          
+ 15             [-1, 4]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 16                  -1  1     32096  ultralytics.nn.modules.block.C3k2            [256, 64, 1, False]           
+ 17                  -1  1     36992  ultralytics.nn.modules.conv.Conv             [64, 64, 3, 2]                
+ 18            [-1, 13]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 19                  -1  1     86720  ultralytics.nn.modules.block.C3k2            [192, 128, 1, False]          
+ 20                  -1  1    147712  ultralytics.nn.modules.conv.Conv             [128, 128, 3, 2]              
+ 21            [-1, 10]  1         0  ultralytics.nn.modules.conv.Concat           [1]                           
+ 22                  -1  1    378880  ultralytics.nn.modules.block.C3k2            [384, 256, 1, True]           
+ 23        [16, 19, 22]  1    431062  ultralytics.nn.modules.head.Detect           [2, 16, None, [64, 128, 256]] 
+YOLO11n summary: 182 layers, 2,590,230 parameters, 2,590,214 gradients, 6.4 GFLOPs
+
+Transferred 448/499 items from pretrained weights
+[34m[1mDDP:[0m debug command /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/.venv/bin/python -m torch.distributed.run --nproc_per_node 4 --master_port 59949 /cephyr/users/yayi/Alvis/.config/Ultralytics/DDP/_temp_y4cp7em822519078857744.py
+Ultralytics 8.4.48 🚀 Python-3.11.3 torch-2.1.2 CUDA:0 (NVIDIA A40, 45490MiB)
+                                               CUDA:1 (NVIDIA A40, 45490MiB)
+                                               CUDA:2 (NVIDIA A40, 45490MiB)
+                                               CUDA:3 (NVIDIA A40, 45490MiB)
+Overriding model.yaml nc=80 with nc=2
+Transferred 448/499 items from pretrained weights
+Freezing layer 'model.23.dfl.conv.weight'
+[34m[1mAMP: [0mrunning Automatic Mixed Precision (AMP) checks...
+[34m[1mAMP: [0mchecks passed ✅
+[34m[1mtrain: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 256.8±96.0 MB/s, size: 401.2 KB)
+[K[34m[1mtrain: [0mScanning /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set/labels/train... 200 images, 43 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 200/200 2.4Kit/s 0.1s
+[34m[1mtrain: [0mNew cache created: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set/labels/train.cache
+[34m[1mval: [0mFast image access ✅ (ping: 0.0±0.0 ms, read: 537.0±315.7 MB/s, size: 422.5 KB)
+[K[34m[1mval: [0mScanning /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set/labels/val... 70 images, 16 backgrounds, 0 corrupt: 100% ━━━━━━━━━━━━ 70/70 1.5Kit/s 0.0s
+[34m[1mval: [0mNew cache created: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/yolo_data_set/labels/val.cache
+[34m[1moptimizer:[0m 'optimizer=auto' found, ignoring 'lr0=0.01' and 'momentum=0.937' and determining best 'optimizer', 'lr0' and 'momentum' automatically... 
+[34m[1moptimizer:[0m AdamW(lr=0.001667, momentum=0.9) with parameter groups 81 weight(decay=0.0), 88 weight(decay=0.0005), 87 bias(decay=0.0)
+Plotting labels to /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/runs/yolo11n_crack_broken_e80_4gpu_20260509/labels.jpg... 
+Image sizes 640 train, 640 val
+Using 16 dataloader workers
+Logging results to [1m/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/yolo/runs/yolo11n_crack_broken_e80_4gpu_20260509[0m
+Starting training for 80 epochs...
+
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+[2026-05-09 20:21:55,642] torch.distributed.elastic.agent.server.api: [WARNING] Received 15 death signal, shutting down workers
+[2026-05-09 20:21:55,642] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 855521 closing signal SIGTERM
+[2026-05-09 20:21:55,642] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 855523 closing signal SIGTERM
+srun: error: alvis7-09: task 0: Terminated
+srun: Force Terminated StepId=6608325.33

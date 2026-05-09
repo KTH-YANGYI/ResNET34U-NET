@@ -1,0 +1,68 @@
+[
+  {
+    "variant": "yolo11n_e80_baseline",
+    "run": "yolo11n_crack_broken_e80_2gpu_20260509",
+    "status": "completed",
+    "best_epoch": 68,
+    "best_mAP50": 0.92936,
+    "best_mAP50_95": 0.57283,
+    "last_epoch": 80,
+    "last_mAP50": 0.91589,
+    "last_mAP50_95": 0.59855
+  },
+  {
+    "variant": "yolo11n_pad0_min8",
+    "run": "yolo11n_crack_broken_e80_2gpu_pad0_min8_20260509",
+    "status": "completed",
+    "best_epoch": 73,
+    "best_mAP50": 0.92418,
+    "best_mAP50_95": 0.56471,
+    "last_epoch": 80,
+    "last_mAP50": 0.86518,
+    "last_mAP50_95": 0.54069
+  },
+  {
+    "variant": "yolo26n_e80_baseline",
+    "run": "yolo26n_crack_broken_e80_2gpu_baseline_20260509",
+    "status": "completed",
+    "best_epoch": 61,
+    "best_mAP50": 0.89434,
+    "best_mAP50_95": 0.55857,
+    "last_epoch": 80,
+    "last_mAP50": 0.86532,
+    "last_mAP50_95": 0.53592
+  },
+  {
+    "variant": "yolo11n_e140_baseline",
+    "run": "yolo11n_crack_broken_e140_2gpu_baseline_20260509",
+    "status": "completed",
+    "best_epoch": 135,
+    "best_mAP50": 0.93251,
+    "best_mAP50_95": 0.60022,
+    "last_epoch": 140,
+    "last_mAP50": 0.90232,
+    "last_mAP50_95": 0.5654
+  },
+  {
+    "variant": "yolo11n_e200_baseline",
+    "run": "yolo11n_crack_broken_e200_2gpu_baseline_20260509",
+    "status": "completed",
+    "best_epoch": 137,
+    "best_mAP50": 0.93687,
+    "best_mAP50_95": 0.55164,
+    "last_epoch": 200,
+    "last_mAP50": 0.90374,
+    "last_mAP50_95": 0.57979
+  },
+  {
+    "variant": "yolo11n_e140_img832",
+    "run": "yolo11n_crack_broken_e140_img832_2gpu_20260509",
+    "status": "completed",
+    "best_epoch": 117,
+    "best_mAP50": 0.94454,
+    "best_mAP50_95": 0.58694,
+    "last_epoch": 140,
+    "last_mAP50": 0.88263,
+    "last_mAP50_95": 0.58702
+  }
+]

@@ -1,0 +1,7 @@
+variant,run,status,best_epoch,best_mAP50,best_mAP50_95,last_epoch,last_mAP50,last_mAP50_95
+yolo11n_e80_baseline,yolo11n_crack_broken_e80_2gpu_20260509,completed,68,0.92936,0.57283,80,0.91589,0.59855
+yolo11n_pad0_min8,yolo11n_crack_broken_e80_2gpu_pad0_min8_20260509,completed,73,0.92418,0.56471,80,0.86518,0.54069
+yolo26n_e80_baseline,yolo26n_crack_broken_e80_2gpu_baseline_20260509,completed,61,0.89434,0.55857,80,0.86532,0.53592
+yolo11n_e140_baseline,yolo11n_crack_broken_e140_2gpu_baseline_20260509,completed,135,0.93251,0.60022,140,0.90232,0.5654
+yolo11n_e200_baseline,yolo11n_crack_broken_e200_2gpu_baseline_20260509,completed,137,0.93687,0.55164,200,0.90374,0.57979
+yolo11n_e140_img832,yolo11n_crack_broken_e140_img832_2gpu_20260509,completed,117,0.94454,0.58694,140,0.88263,0.58702

@@ -1,0 +1,684 @@
+# YOLO crack bbox label dump
+# format: class_id x_center y_center width height  (normalized YOLO xywh)
+# dataset: yolo_data_set, class 0=crack, class 1=broken
+
+## SPLIT: train
+### train/camera_crack_camera004.txt
+0 0.50000000 0.50000000 0.23750000 0.28125000
+### train/camera_crack_camera010.txt
+0 0.50078125 0.50078125 0.07968750 0.08593750
+### train/camera_crack_camera011.txt
+0 0.50000000 0.50078125 0.19687500 0.35781250
+### train/camera_crack_camera021.txt
+0 0.50000000 0.50078125 0.18750000 0.13906250
+### train/camera_crack_camera029.txt
+0 0.50078125 0.49921875 0.13593750 0.13281250
+### train/camera_crack_camera042.txt
+0 0.49921875 0.49921875 0.07968750 0.13906250
+### train/camera_crack_camera044.txt
+0 0.50000000 0.49921875 0.10937500 0.08281250
+### train/camera_crack_camera047.txt
+0 0.50000000 0.50000000 0.10937500 0.04375000
+### train/camera_crack_camera049.txt
+0 0.50000000 0.50078125 0.18437500 0.07031250
+### train/camera_crack_camera056.txt
+0 0.50000000 0.49921875 0.20937500 0.12656250
+### train/camera_crack_camera060.txt
+0 0.49921875 0.50000000 0.25468750 0.38750000
+### train/camera_crack_camera080.txt
+0 0.50000000 0.50078125 0.22187500 0.33906250
+### train/camera_crack_camera081.txt
+0 0.50000000 0.49921875 0.13750000 0.09218750
+### train/camera_crack_camera082.txt
+0 0.50078125 0.50078125 0.22343750 0.39218750
+### train/camera_crack_camera084.txt
+0 0.49921875 0.50000000 0.13593750 0.19687500
+### train/camera_crack_camera087.txt
+0 0.50000000 0.50078125 0.19062500 0.12031250
+### train/camera_crack_camera088.txt
+0 0.49921875 0.49921875 0.12968750 0.15156250
+### train/camera_crack_camera093.txt
+0 0.50000000 0.56484375 0.13750000 0.07031250
+### train/camera_crack_camera099.txt
+0 0.50000000 0.50078125 0.25625000 0.42656250
+### train/camera_crack_camera110.txt
+0 0.50078125 0.50625000 0.12968750 0.29687500
+### train/camera_crack_camera111.txt
+0 0.49921875 0.56015625 0.14531250 0.03593750
+### train/camera_crack_camera112.txt
+0 0.50000000 0.50000000 0.21250000 0.28437500
+### train/camera_crack_camera115.txt
+0 0.49921875 0.63125000 0.12968750 0.04375000
+### train/camera_crack_camera130.txt
+0 0.50000000 0.61484375 0.10937500 0.12656250
+### train/camera_crack_camera136.txt
+0 0.50000000 0.67578125 0.10312500 0.03593750
+### train/camera_crack_camera137.txt
+0 0.50078125 0.53281250 0.18906250 0.30312500
+### train/camera_crack_camera141.txt
+0 0.50000000 0.65937500 0.11875000 0.04375000
+### train/camera_crack_camera144.txt
+0 0.49921875 0.55546875 0.21718750 0.28281250
+### train/camera_crack_camera147.txt
+0 0.50000000 0.51484375 0.14687500 0.22031250
+### train/camera_crack_camera148.txt
+0 0.50000000 0.61328125 0.13437500 0.17343750
+### train/camera_crack_camera152.txt
+0 0.50000000 0.50000000 0.19687500 0.35625000
+### train/camera_crack_camera153.txt
+0 0.50078125 0.58750000 0.11093750 0.11562500
+### train/camera_crack_camera154.txt
+0 0.50000000 0.49921875 0.22500000 0.34531250
+### train/camera_crack_camera155.txt
+0 0.50000000 0.54843750 0.18125000 0.25312500
+### train/camera_crack_camera163.txt
+0 0.50000000 0.50859375 0.20312500 0.33281250
+### train/camera_crack_camera169.txt
+0 0.50000000 0.58281250 0.10625000 0.11250000
+### train/camera_crack_camera170.txt
+0 0.50078125 0.50000000 0.27656250 0.36562500
+### train/camera_crack_camera171.txt
+0 0.50000000 0.64765625 0.11562500 0.03593750
+### train/camera_crack_camera173.txt
+0 0.50078125 0.50000000 0.21718750 0.40625000
+### train/camera_crack_camera174.txt
+0 0.49921875 0.59765625 0.10468750 0.12968750
+### train/camera_crack_camera176.txt
+0 0.50000000 0.56796875 0.06250000 0.11406250
+### train/camera_crack_camera177.txt
+0 0.50078125 0.50000000 0.21406250 0.34375000
+### train/camera_crack_camera178.txt
+0 0.49921875 0.59609375 0.06718750 0.03906250
+### train/camera_crack_camera180.txt
+0 0.50000000 0.50000000 0.11250000 0.06250000
+### train/camera_crack_camera181.txt
+0 0.50000000 0.50000000 0.17500000 0.28750000
+### train/camera_crack_camera189.txt
+0 0.50078125 0.54218750 0.27656250 0.19687500
+### train/camera_crack_camera196.txt
+0 0.50078125 0.49921875 0.21406250 0.40156250
+### train/camera_crack_camera198.txt
+0 0.50000000 0.54296875 0.19687500 0.33593750
+### train/camera_crack_camera202.txt
+0 0.49921875 0.54453125 0.22968750 0.32343750
+### train/camera_crack_camera203.txt
+0 0.50000000 0.51640625 0.24062500 0.34531250
+### train/camera_crack_camera206.txt
+0 0.50000000 0.51250000 0.22500000 0.31562500
+### train/camera_crack_camera207.txt
+0 0.50000000 0.58281250 0.18750000 0.26250000
+### train/camera_crack_camera209.txt
+0 0.50000000 0.59453125 0.21875000 0.23593750
+### train/camera_crack_camera211.txt
+0 0.49921875 0.54765625 0.20781250 0.31718750
+### train/camera_crack_camera212.txt
+0 0.49921875 0.49921875 0.25468750 0.42343750
+### train/camera_crack_camera216.txt
+0 0.50000000 0.64687500 0.14687500 0.12812500
+### train/camera_crack_camera218.txt
+0 0.50000000 0.65234375 0.13437500 0.18281250
+### train/camera_crack_camera219.txt
+0 0.50078125 0.62890625 0.16093750 0.03281250
+### train/camera_crack_camera222.txt
+0 0.50078125 0.68593750 0.09843750 0.12187500
+### train/camera_crack_camera228.txt
+0 0.50000000 0.55234375 0.23750000 0.30468750
+### train/camera_crack_camera229.txt
+0 0.50078125 0.63984375 0.17343750 0.10468750
+### train/camera_crack_camera230.txt
+0 0.50000000 0.65625000 0.11562500 0.03125000
+### train/camera_crack_camera234.txt
+0 0.49921875 0.63828125 0.19843750 0.17343750
+### train/camera_crack_camera236.txt
+0 0.50000000 0.50000000 0.25000000 0.19062500
+### train/camera_crack_camera239.txt
+0 0.49921875 0.65156250 0.20781250 0.11562500
+### train/camera_crack_camera243.txt
+0 0.49921875 0.57656250 0.28593750 0.28437500
+### train/camera_crack_camera245.txt
+0 0.49921875 0.67578125 0.13906250 0.12656250
+### train/camera_crack_camera246.txt
+0 0.50078125 0.65781250 0.19531250 0.11250000
+### train/camera_crack_camera247.txt
+0 0.50078125 0.56406250 0.19531250 0.30000000
+### train/camera_crack_camera248.txt
+0 0.50078125 0.68593750 0.13593750 0.03437500
+### train/camera_crack_camera249.txt
+0 0.49921875 0.53593750 0.23593750 0.23750000
+### train/camera_crack_camera250.txt
+0 0.50078125 0.49921875 0.25468750 0.33593750
+### train/camera_crack_camera252.txt
+0 0.50000000 0.64218750 0.15937500 0.05312500
+### train/camera_crack_camera253.txt
+0 0.50000000 0.64296875 0.16562500 0.02656250
+### train/camera_crack_camera254.txt
+0 0.50000000 0.58203125 0.20312500 0.26718750
+### train/camera_crack_camera255.txt
+0 0.50000000 0.61406250 0.19687500 0.21250000
+### train/camera_crack_camera257.txt
+0 0.50078125 0.67812500 0.12031250 0.11250000
+### train/camera_crack_camera261.txt
+0 0.49921875 0.69140625 0.10156250 0.04218750
+### train/camera_crack_camera262.txt
+0 0.50078125 0.60546875 0.18281250 0.25156250
+### train/camera_crack_camera266.txt
+0 0.50000000 0.62421875 0.19687500 0.19843750
+### train/camera_crack_camera270.txt
+0 0.50078125 0.64218750 0.13281250 0.04687500
+### train/camera_crack_camera272.txt
+0 0.50000000 0.54687500 0.15625000 0.25312500
+### train/camera_crack_camera276.txt
+0 0.50000000 0.63984375 0.19062500 0.18281250
+### train/camera_crack_camera278.txt
+0 0.50000000 0.67500000 0.08125000 0.04375000
+### train/camera_crack_camera279.txt
+0 0.50078125 0.60703125 0.12031250 0.10468750
+### train/camera_crack_camera282.txt
+0 0.50078125 0.67968750 0.13593750 0.11875000
+### train/camera_crack_camera284.txt
+0 0.50078125 0.50078125 0.23906250 0.40156250
+### train/camera_crack_camera286.txt
+0 0.50078125 0.62500000 0.15781250 0.05312500
+### train/camera_crack_camera287.txt
+0 0.49921875 0.67421875 0.12343750 0.10468750
+### train/camera_crack_camera289.txt
+0 0.50000000 0.63828125 0.15937500 0.06406250
+### train/camera_crack_camera290.txt
+0 0.50000000 0.59218750 0.15625000 0.26875000
+### train/camera_crack_camera292.txt
+0 0.49921875 0.64609375 0.11718750 0.02343750
+### train/camera_crack_camera293.txt
+0 0.50000000 0.50000000 0.25000000 0.41250000
+### train/camera_crack_camera299.txt
+0 0.50000000 0.62968750 0.15312500 0.05625000
+### train/camera_normal_camera001.txt
+<empty normal label>
+### train/camera_normal_camera005.txt
+<empty normal label>
+### train/camera_normal_camera006.txt
+<empty normal label>
+### train/camera_normal_camera015.txt
+<empty normal label>
+### train/camera_normal_camera022.txt
+<empty normal label>
+### train/camera_normal_camera026.txt
+<empty normal label>
+### train/camera_normal_camera034.txt
+<empty normal label>
+### train/camera_normal_camera043.txt
+<empty normal label>
+### train/camera_normal_camera045.txt
+<empty normal label>
+### train/camera_normal_camera046.txt
+<empty normal label>
+### train/camera_normal_camera050.txt
+<empty normal label>
+### train/camera_normal_camera051.txt
+<empty normal label>
+### train/camera_normal_camera062.txt
+<empty normal label>
+### train/camera_normal_camera066.txt
+<empty normal label>
+### train/camera_normal_camera077.txt
+<empty normal label>
+### train/camera_normal_camera085.txt
+<empty normal label>
+### train/camera_normal_camera086.txt
+<empty normal label>
+### train/camera_normal_camera089.txt
+<empty normal label>
+### train/camera_normal_camera098.txt
+<empty normal label>
+### train/camera_normal_camera103.txt
+<empty normal label>
+### train/camera_normal_camera108.txt
+<empty normal label>
+### train/camera_normal_camera132.txt
+<empty normal label>
+### train/phone_crack_phone006.txt
+0 0.50000000 0.49921875 0.04062500 0.02343750
+### train/phone_crack_phone026.txt
+0 0.49921875 0.50078125 0.03906250 0.01718750
+### train/phone_crack_phone040.txt
+0 0.50000000 0.50000000 0.09375000 0.07187500
+### train/phone_crack_phone048.txt
+0 0.50000000 0.50000000 0.05312500 0.04062500
+### train/phone_crack_phone060.txt
+0 0.50000000 0.49921875 0.06250000 0.02656250
+### train/phone_crack_phone072.txt
+0 0.50000000 0.50000000 0.06250000 0.03750000
+### train/phone_crack_phone084.txt
+0 0.50000000 0.50000000 0.05000000 0.02187500
+### train/phone_crack_phone116.txt
+0 0.50078125 0.50078125 0.05781250 0.03593750
+### train/phone_crack_phone126.txt
+0 0.50000000 0.50000000 0.05625000 0.01875000
+### train/phone_crack_phone150.txt
+0 0.50078125 0.50078125 0.04531250 0.01718750
+### train/phone_crack_phone154.txt
+0 0.49921875 0.49921875 0.07343750 0.06718750
+### train/phone_crack_phone164.txt
+0 0.50000000 0.50078125 0.04687500 0.02343750
+### train/phone_crack_phone184.txt
+0 0.50000000 0.50078125 0.11875000 0.10468750
+### train/phone_crack_phone193.txt
+0 0.50078125 0.50000000 0.04531250 0.02187500
+### train/phone_crack_phone213.txt
+0 0.49921875 0.49921875 0.04843750 0.02031250
+### train/phone_crack_phone223.txt
+0 0.50000000 0.50000000 0.09375000 0.05312500
+### train/phone_crack_phone243.txt
+0 0.50000000 0.50000000 0.05312500 0.02812500
+### train/phone_crack_phone251.txt
+0 0.49921875 0.50000000 0.09531250 0.14687500
+### train/phone_crack_phone273.txt
+0 0.50000000 0.50000000 0.05625000 0.02187500
+### train/phone_crack_phone285.txt
+0 0.50078125 0.50078125 0.05781250 0.03593750
+### train/phone_crack_phone315.txt
+0 0.50078125 0.50078125 0.04531250 0.02031250
+### train/phone_crack_phone325.txt
+0 0.50000000 0.50078125 0.06562500 0.02968750
+### train/phone_crack_phone337.txt
+0 0.50000000 0.49921875 0.04375000 0.02031250
+### train/phone_crack_phone339.txt
+0 0.50078125 0.50000000 0.12656250 0.10625000
+### train/phone_crack_phone347.txt
+0 0.50000000 0.50078125 0.09062500 0.09218750
+### train/phone_crack_phone391.txt
+0 0.50000000 0.49921875 0.05937500 0.02343750
+### train/phone_crack_phone401.txt
+0 0.50000000 0.50078125 0.06562500 0.04218750
+### train/phone_crack_phone430.txt
+0 0.49921875 0.50000000 0.07968750 0.03437500
+### train/phone_crack_phone454.txt
+0 0.50078125 0.50000000 0.07343750 0.08125000
+### train/phone_crack_phone464.txt
+0 0.49921875 0.50078125 0.08593750 0.08281250
+### train/phone_crack_phone470.txt
+0 0.49921875 0.50000000 0.07968750 0.05312500
+### train/phone_crack_phone498.txt
+0 0.50078125 0.49921875 0.07656250 0.04843750
+### train/phone_crack_phone508.txt
+0 0.50000000 0.50000000 0.06562500 0.03125000
+### train/phone_crack_phone524.txt
+0 0.50000000 0.50078125 0.05937500 0.02031250
+### train/phone_crack_phone534.txt
+0 0.50000000 0.49921875 0.06562500 0.06406250
+### train/phone_crack_phone546.txt
+0 0.49921875 0.50000000 0.08593750 0.10312500
+### train/phone_crack_phone552.txt
+0 0.50078125 0.50078125 0.03906250 0.01406250
+### train/phone_crack_phone554.txt
+0 0.50000000 0.50000000 0.06875000 0.03125000
+### train/phone_crack_phone556.txt
+0 0.50078125 0.49921875 0.11093750 0.15156250
+### train/phone_crack_phone564.txt
+0 0.50078125 0.50000000 0.07343750 0.07187500
+### train/phone_crack_phone594.txt
+0 0.50000000 0.50000000 0.05625000 0.03750000
+### train/phone_crack_phone636.txt
+0 0.50000000 0.49921875 0.04375000 0.02343750
+### train/phone_crack_phone638.txt
+0 0.50000000 0.50000000 0.09062500 0.10625000
+### train/phone_crack_phone646.txt
+0 0.50000000 0.49921875 0.05312500 0.02968750
+### train/phone_crack_phone648.txt
+0 0.50000000 0.50000000 0.11875000 0.12187500
+### train/phone_crack_phone656.txt
+0 0.49921875 0.49921875 0.05156250 0.03281250
+### train/phone_crack_phone666.txt
+0 0.50000000 0.49921875 0.05312500 0.02031250
+### train/phone_crack_phone668.txt
+0 0.50000000 0.50000000 0.10937500 0.09687500
+### train/phone_crack_phone676.txt
+0 0.50000000 0.49921875 0.05000000 0.02968750
+### train/phone_crack_phone686.txt
+0 0.49921875 0.50000000 0.11406250 0.07187500
+### train/phone_crack_phone732.txt
+0 0.50000000 0.50000000 0.05000000 0.02500000
+### train/phone_crack_phone754.txt
+0 0.50078125 0.50000000 0.13593750 0.11250000
+### train/phone_crack_phone760.txt
+0 0.50000000 0.50078125 0.04062500 0.02031250
+### train/phone_crack_phone762.txt
+0 0.50000000 0.50000000 0.07812500 0.04375000
+### train/phone_crack_phone770.txt
+0 0.49921875 0.50000000 0.05781250 0.03750000
+### train/phone_crack_phone780.txt
+0 0.50078125 0.50078125 0.06406250 0.03281250
+### train/phone_crack_phone790.txt
+0 0.50000000 0.49921875 0.04687500 0.02343750
+### train/phone_crack_phone800.txt
+0 0.50000000 0.49921875 0.04687500 0.02656250
+### train/phone_crack_phone827.txt
+0 0.49921875 0.50000000 0.05156250 0.01875000
+### train/phone_crack_phone849.txt
+0 0.50078125 0.50000000 0.07031250 0.05625000
+### train/phone_crack_phone859.txt
+0 0.50000000 0.50000000 0.04687500 0.01562500
+### train/phone_crack_phone871.txt
+0 0.49921875 0.49921875 0.07343750 0.04531250
+### train/phone_crack_phone991.txt
+0 0.49921875 0.50000000 0.06093750 0.04062500
+### train/phone_normal_phone002.txt
+<empty normal label>
+### train/phone_normal_phone022.txt
+<empty normal label>
+### train/phone_normal_phone034.txt
+<empty normal label>
+### train/phone_normal_phone056.txt
+<empty normal label>
+### train/phone_normal_phone068.txt
+<empty normal label>
+### train/phone_normal_phone070.txt
+<empty normal label>
+### train/phone_normal_phone100.txt
+<empty normal label>
+### train/phone_normal_phone136.txt
+<empty normal label>
+### train/phone_normal_phone138.txt
+<empty normal label>
+### train/phone_normal_phone160.txt
+<empty normal label>
+### train/phone_normal_phone171.txt
+<empty normal label>
+### train/phone_normal_phone180.txt
+<empty normal label>
+### train/phone_normal_phone189.txt
+<empty normal label>
+### train/phone_normal_phone209.txt
+<empty normal label>
+### train/phone_normal_phone219.txt
+<empty normal label>
+### train/phone_normal_phone239.txt
+<empty normal label>
+### train/phone_normal_phone247.txt
+<empty normal label>
+### train/phone_normal_phone269.txt
+<empty normal label>
+### train/phone_normal_phone281.txt
+<empty normal label>
+### train/phone_normal_phone293.txt
+<empty normal label>
+### train/phone_normal_phone301.txt
+<empty normal label>
+
+## SPLIT: val
+### val/camera_crack_camera052.txt
+0 0.50000000 0.50078125 0.08750000 0.05156250
+### val/camera_crack_camera059.txt
+0 0.50000000 0.50000000 0.10312500 0.09062500
+### val/camera_crack_camera064.txt
+0 0.49921875 0.49921875 0.19531250 0.17343750
+### val/camera_crack_camera065.txt
+0 0.50078125 0.50000000 0.24218750 0.40937500
+### val/camera_crack_camera076.txt
+0 0.50078125 0.50000000 0.07343750 0.03125000
+### val/camera_crack_camera095.txt
+0 0.50000000 0.51796875 0.07812500 0.03593750
+### val/camera_crack_camera109.txt
+0 0.50078125 0.52578125 0.12343750 0.26406250
+### val/camera_crack_camera119.txt
+0 0.50000000 0.49921875 0.23750000 0.36718750
+### val/camera_crack_camera126.txt
+0 0.50000000 0.62500000 0.10625000 0.03750000
+### val/camera_crack_camera135.txt
+0 0.49921875 0.62343750 0.12031250 0.14375000
+### val/camera_crack_camera139.txt
+0 0.49921875 0.66093750 0.12031250 0.05000000
+### val/camera_crack_camera146.txt
+0 0.50000000 0.49921875 0.23437500 0.37343750
+### val/camera_crack_camera161.txt
+0 0.50000000 0.66718750 0.10312500 0.04375000
+### val/camera_crack_camera164.txt
+0 0.49921875 0.58281250 0.12968750 0.06875000
+### val/camera_crack_camera166.txt
+0 0.49921875 0.60937500 0.12031250 0.18125000
+### val/camera_crack_camera185.txt
+0 0.50000000 0.50000000 0.24375000 0.32187500
+### val/camera_crack_camera188.txt
+0 0.50000000 0.63906250 0.13750000 0.05937500
+### val/camera_crack_camera191.txt
+0 0.50078125 0.57187500 0.11093750 0.03750000
+### val/camera_crack_camera193.txt
+0 0.49921875 0.61406250 0.17031250 0.23750000
+### val/camera_crack_camera214.txt
+0 0.50078125 0.59296875 0.20468750 0.26718750
+### val/camera_crack_camera233.txt
+0 0.50000000 0.67109375 0.12500000 0.12343750
+### val/camera_crack_camera258.txt
+0 0.50000000 0.64375000 0.17812500 0.05312500
+### val/camera_crack_camera267.txt
+0 0.50000000 0.65546875 0.16562500 0.16093750
+### val/camera_crack_camera274.txt
+0 0.50078125 0.67031250 0.11093750 0.01875000
+### val/camera_crack_camera275.txt
+0 0.50078125 0.63437500 0.19843750 0.19375000
+### val/camera_crack_camera280.txt
+0 0.49921875 0.65390625 0.16093750 0.12343750
+### val/camera_crack_camera281.txt
+0 0.50000000 0.56171875 0.20625000 0.26093750
+### val/camera_crack_camera283.txt
+0 0.50078125 0.58437500 0.21093750 0.25625000
+### val/camera_crack_camera285.txt
+0 0.50000000 0.63203125 0.18437500 0.05781250
+### val/camera_crack_camera288.txt
+0 0.50000000 0.61406250 0.19375000 0.06250000
+### val/camera_crack_camera294.txt
+0 0.50000000 0.59531250 0.17187500 0.19062500
+### val/camera_crack_camera296.txt
+0 0.50000000 0.53984375 0.23437500 0.27656250
+### val/camera_normal_camera002.txt
+<empty normal label>
+### val/camera_normal_camera019.txt
+<empty normal label>
+### val/camera_normal_camera068.txt
+<empty normal label>
+### val/camera_normal_camera072.txt
+<empty normal label>
+### val/camera_normal_camera073.txt
+<empty normal label>
+### val/camera_normal_camera092.txt
+<empty normal label>
+### val/camera_normal_camera114.txt
+<empty normal label>
+### val/camera_normal_camera118.txt
+<empty normal label>
+### val/phone_crack_phone203.txt
+0 0.50078125 0.50078125 0.06093750 0.03906250
+### val/phone_crack_phone231.txt
+0 0.49921875 0.50000000 0.06093750 0.04062500
+### val/phone_crack_phone261.txt
+0 0.50000000 0.50078125 0.04062500 0.01718750
+### val/phone_crack_phone305.txt
+0 0.50078125 0.50000000 0.05156250 0.02187500
+### val/phone_crack_phone357.txt
+0 0.49921875 0.50078125 0.05468750 0.02031250
+### val/phone_crack_phone367.txt
+0 0.49921875 0.50000000 0.05468750 0.02187500
+### val/phone_crack_phone444.txt
+0 0.50000000 0.49921875 0.08437500 0.07968750
+### val/phone_crack_phone480.txt
+0 0.50078125 0.50078125 0.07343750 0.05156250
+### val/phone_crack_phone562.txt
+0 0.50000000 0.50000000 0.04687500 0.01875000
+### val/phone_crack_phone584.txt
+0 0.50000000 0.50078125 0.08437500 0.07656250
+### val/phone_crack_phone618.txt
+0 0.50078125 0.50000000 0.05156250 0.04375000
+### val/phone_crack_phone626.txt
+0 0.50078125 0.50000000 0.05156250 0.03437500
+### val/phone_crack_phone684.txt
+0 0.49921875 0.50078125 0.04531250 0.01406250
+### val/phone_crack_phone696.txt
+0 0.49921875 0.50078125 0.09218750 0.07031250
+### val/phone_crack_phone704.txt
+0 0.49921875 0.50078125 0.07031250 0.06093750
+### val/phone_crack_phone714.txt
+0 0.50000000 0.50000000 0.05000000 0.02187500
+### val/phone_crack_phone724.txt
+0 0.50078125 0.50000000 0.06093750 0.03437500
+### val/phone_crack_phone819.txt
+0 0.49921875 0.49921875 0.05781250 0.01718750
+### val/phone_crack_phone861.txt
+0 0.50078125 0.50000000 0.11406250 0.07187500
+### val/phone_crack_phone919.txt
+0 0.50000000 0.50000000 0.07187500 0.04687500
+### val/phone_crack_phone935.txt
+0 0.50078125 0.50000000 0.07343750 0.04062500
+### val/phone_crack_phone959.txt
+0 0.50078125 0.49921875 0.06718750 0.03906250
+### val/phone_normal_phone044.txt
+<empty normal label>
+### val/phone_normal_phone082.txt
+<empty normal label>
+### val/phone_normal_phone090.txt
+<empty normal label>
+### val/phone_normal_phone146.txt
+<empty normal label>
+### val/phone_normal_phone199.txt
+<empty normal label>
+### val/phone_normal_phone211.txt
+<empty normal label>
+### val/phone_normal_phone259.txt
+<empty normal label>
+### val/phone_normal_phone291.txt
+<empty normal label>
+
+## SPLIT: test
+### test/camera_crack_camera007.txt
+0 0.49921875 0.50000000 0.12656250 0.10312500
+### test/camera_crack_camera014.txt
+0 0.50000000 0.50000000 0.24375000 0.23437500
+### test/camera_crack_camera017.txt
+0 0.50000000 0.50000000 0.24687500 0.34687500
+### test/camera_crack_camera024.txt
+0 0.50000000 0.50078125 0.10937500 0.07343750
+### test/camera_crack_camera025.txt
+0 0.50078125 0.50078125 0.21718750 0.35781250
+### test/camera_crack_camera037.txt
+0 0.49921875 0.50000000 0.19218750 0.11875000
+### test/camera_crack_camera071.txt
+0 0.49921875 0.50078125 0.18281250 0.25468750
+### test/camera_crack_camera075.txt
+0 0.49921875 0.49921875 0.20156250 0.19843750
+### test/camera_crack_camera078.txt
+0 0.50000000 0.50000000 0.11875000 0.04687500
+### test/camera_crack_camera107.txt
+0 0.50000000 0.55625000 0.08750000 0.10312500
+### test/camera_crack_camera116.txt
+0 0.50000000 0.50000000 0.20937500 0.30625000
+### test/camera_crack_camera121.txt
+0 0.50000000 0.50000000 0.22187500 0.35000000
+### test/camera_crack_camera123.txt
+0 0.50000000 0.49921875 0.26875000 0.41093750
+### test/camera_crack_camera138.txt
+0 0.50000000 0.50078125 0.20937500 0.37343750
+### test/camera_crack_camera142.txt
+0 0.50078125 0.61328125 0.07343750 0.02343750
+### test/camera_crack_camera225.txt
+0 0.50000000 0.67109375 0.14687500 0.12968750
+### test/camera_crack_camera227.txt
+0 0.50000000 0.66640625 0.11562500 0.02656250
+### test/camera_crack_camera238.txt
+0 0.50000000 0.65937500 0.15000000 0.11875000
+### test/camera_crack_camera240.txt
+0 0.49921875 0.63515625 0.21406250 0.15156250
+### test/camera_crack_camera256.txt
+0 0.50000000 0.66015625 0.12187500 0.12031250
+### test/camera_crack_camera260.txt
+0 0.49921875 0.64609375 0.18281250 0.17968750
+### test/camera_crack_camera263.txt
+0 0.49921875 0.60234375 0.19843750 0.26406250
+### test/camera_crack_camera264.txt
+0 0.50000000 0.63281250 0.10937500 0.05312500
+### test/camera_crack_camera265.txt
+0 0.50000000 0.63359375 0.19062500 0.22968750
+### test/camera_crack_camera269.txt
+0 0.50000000 0.62656250 0.19687500 0.23750000
+### test/camera_crack_camera277.txt
+0 0.50078125 0.66875000 0.13906250 0.13437500
+### test/camera_crack_camera297.txt
+0 0.50000000 0.62109375 0.18125000 0.19218750
+### test/camera_crack_camera298.txt
+0 0.49921875 0.66953125 0.12031250 0.11406250
+### test/camera_crack_camera300.txt
+0 0.49921875 0.62421875 0.12968750 0.13281250
+### test/camera_crack_camera301.txt
+0 0.50000000 0.59609375 0.17500000 0.16093750
+### test/camera_crack_camera303.txt
+0 0.50000000 0.55859375 0.19687500 0.19218750
+### test/camera_normal_camera023.txt
+<empty normal label>
+### test/camera_normal_camera035.txt
+<empty normal label>
+### test/camera_normal_camera039.txt
+<empty normal label>
+### test/camera_normal_camera054.txt
+<empty normal label>
+### test/camera_normal_camera090.txt
+<empty normal label>
+### test/camera_normal_camera091.txt
+<empty normal label>
+### test/camera_normal_camera104.txt
+<empty normal label>
+### test/camera_normal_camera117.txt
+<empty normal label>
+### test/phone_crack_phone016.txt
+0 0.50000000 0.50078125 0.05312500 0.03593750
+### test/phone_crack_phone038.txt
+0 0.50000000 0.50000000 0.03437500 0.01875000
+### test/phone_crack_phone094.txt
+0 0.50000000 0.50000000 0.05625000 0.03437500
+### test/phone_crack_phone140.txt
+0 0.50078125 0.49921875 0.05468750 0.02031250
+### test/phone_crack_phone379.txt
+0 0.50078125 0.49921875 0.05468750 0.02031250
+### test/phone_crack_phone442.txt
+0 0.50000000 0.50000000 0.05000000 0.01562500
+### test/phone_crack_phone486.txt
+0 0.50000000 0.49921875 0.07812500 0.03906250
+### test/phone_crack_phone490.txt
+0 0.50078125 0.50000000 0.06718750 0.03437500
+### test/phone_crack_phone496.txt
+0 0.50000000 0.50078125 0.04062500 0.02968750
+### test/phone_crack_phone516.txt
+0 0.49921875 0.50078125 0.07031250 0.03281250
+### test/phone_crack_phone526.txt
+0 0.50000000 0.50000000 0.08750000 0.09062500
+### test/phone_crack_phone544.txt
+0 0.50000000 0.50078125 0.05000000 0.01718750
+### test/phone_crack_phone716.txt
+0 0.50078125 0.50000000 0.13593750 0.14687500
+### test/phone_crack_phone742.txt
+0 0.50000000 0.50000000 0.04687500 0.01875000
+### test/phone_crack_phone752.txt
+0 0.49921875 0.50000000 0.06718750 0.02812500
+### test/phone_crack_phone869.txt
+0 0.50000000 0.50000000 0.04062500 0.01875000
+### test/phone_crack_phone879.txt
+0 0.50078125 0.49921875 0.09843750 0.07031250
+### test/phone_crack_phone891.txt
+0 0.49921875 0.50000000 0.05468750 0.02500000
+### test/phone_crack_phone903.txt
+0 0.50000000 0.49921875 0.06875000 0.05156250
+### test/phone_crack_phone951.txt
+0 0.49921875 0.49921875 0.07343750 0.04218750
+### test/phone_crack_phone973.txt
+0 0.50000000 0.49921875 0.05625000 0.03593750
+### test/phone_normal_phone080.txt
+<empty normal label>
+### test/phone_normal_phone124.txt
+<empty normal label>
+### test/phone_normal_phone148.txt
+<empty normal label>
+### test/phone_normal_phone162.txt
+<empty normal label>
+### test/phone_normal_phone191.txt
+<empty normal label>
+### test/phone_normal_phone227.txt
+<empty normal label>
+### test/phone_normal_phone256.txt
+<empty normal label>
+

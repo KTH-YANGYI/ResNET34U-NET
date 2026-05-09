@@ -1,0 +1,89 @@
+stage2 fold=3 gpu=3 started 2026-05-09T18:20:22+02:00
+fold = 3
+device = cuda
+stage1_checkpoint = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_20260508/stage1/fold3/best_stage1.pt
+defect_train_count = 159
+defect_val_count = 52
+normal_train_count = 45
+normal_val_count = 14
+train_eval_threshold = 0.5
+train_eval_min_area = 0
+save_dir = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_pw12_fp003_20260509/stage2/fold3
+epoch 1/50 | random_normal=45 | hard_normal=0/0 | hard_pool=0 | train_loss=0.679118 | defect_dice=0.529670 | defect_iou=0.385017 | defect_recall=1.000000 | normal_fpr=0.714286 | normal_fp=10/14 | thr=0.50 | min_area=0 | stage2_score=-0.698901 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 2/50 | random_normal=45 | hard_normal=0/0 | hard_pool=0 | train_loss=0.675845 | defect_dice=0.483844 | defect_iou=0.345002 | defect_recall=1.000000 | normal_fpr=0.714286 | normal_fp=10/14 | thr=0.50 | min_area=0 | stage2_score=-0.744728 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (62/64).
+epoch 3/50 | random_normal=45 | hard_normal=62/64 | hard_pool=31 | train_loss=0.678102 | defect_dice=0.592700 | defect_iou=0.445002 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.207300 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (62/64).
+epoch 4/50 | random_normal=45 | hard_normal=62/64 | hard_pool=31 | train_loss=0.676212 | defect_dice=0.475686 | defect_iou=0.342084 | defect_recall=1.000000 | normal_fpr=0.857143 | normal_fp=12/14 | thr=0.50 | min_area=0 | stage2_score=-1.038599 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 5/50 | random_normal=45 | hard_normal=64/64 | hard_pool=37 | train_loss=0.674969 | defect_dice=0.496017 | defect_iou=0.354273 | defect_recall=1.000000 | normal_fpr=1.000000 | normal_fp=14/14 | thr=0.50 | min_area=0 | stage2_score=-1.303983 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 6/50 | random_normal=45 | hard_normal=64/64 | hard_pool=37 | train_loss=0.672957 | defect_dice=0.542958 | defect_iou=0.398486 | defect_recall=1.000000 | normal_fpr=0.785714 | normal_fp=11/14 | thr=0.50 | min_area=0 | stage2_score=-0.828470 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 7/50 | random_normal=45 | hard_normal=64/64 | hard_pool=39 | train_loss=0.672044 | defect_dice=0.515443 | defect_iou=0.374710 | defect_recall=1.000000 | normal_fpr=0.857143 | normal_fp=12/14 | thr=0.50 | min_area=0 | stage2_score=-0.998842 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 8/50 | random_normal=45 | hard_normal=64/64 | hard_pool=39 | train_loss=0.672615 | defect_dice=0.403331 | defect_iou=0.277147 | defect_recall=1.000000 | normal_fpr=1.000000 | normal_fp=14/14 | thr=0.50 | min_area=0 | stage2_score=-1.396669 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 9/50 | random_normal=45 | hard_normal=64/64 | hard_pool=42 | train_loss=0.671071 | defect_dice=0.305115 | defect_iou=0.203824 | defect_recall=1.000000 | normal_fpr=1.000000 | normal_fp=14/14 | thr=0.50 | min_area=0 | stage2_score=-1.494885 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 10/50 | random_normal=45 | hard_normal=64/64 | hard_pool=42 | train_loss=0.670436 | defect_dice=0.487654 | defect_iou=0.349957 | defect_recall=1.000000 | normal_fpr=1.000000 | normal_fp=14/14 | thr=0.50 | min_area=0 | stage2_score=-1.312346 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 11/50 | random_normal=45 | hard_normal=64/64 | hard_pool=40 | train_loss=0.668832 | defect_dice=0.538534 | defect_iou=0.398900 | defect_recall=1.000000 | normal_fpr=1.000000 | normal_fp=14/14 | thr=0.50 | min_area=0 | stage2_score=-1.261466 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 12/50 | random_normal=45 | hard_normal=64/64 | hard_pool=40 | train_loss=0.667682 | defect_dice=0.584772 | defect_iou=0.441498 | defect_recall=1.000000 | normal_fpr=0.857143 | normal_fp=12/14 | thr=0.50 | min_area=0 | stage2_score=-0.929514 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (62/64).
+epoch 13/50 | random_normal=45 | hard_normal=62/64 | hard_pool=31 | train_loss=0.666800 | defect_dice=0.587346 | defect_iou=0.440260 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.355511 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (62/64).
+epoch 14/50 | random_normal=45 | hard_normal=62/64 | hard_pool=31 | train_loss=0.666384 | defect_dice=0.589432 | defect_iou=0.441140 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.353425 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (44/64).
+epoch 15/50 | random_normal=45 | hard_normal=44/64 | hard_pool=22 | train_loss=0.664921 | defect_dice=0.613189 | defect_iou=0.466609 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.186811 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (44/64).
+epoch 16/50 | random_normal=45 | hard_normal=44/64 | hard_pool=22 | train_loss=0.664351 | defect_dice=0.609243 | defect_iou=0.462383 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.333614 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 17/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.663436 | defect_dice=0.585115 | defect_iou=0.436768 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.357743 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 18/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.663572 | defect_dice=0.587383 | defect_iou=0.438910 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.355474 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (42/64).
+epoch 19/50 | random_normal=45 | hard_normal=42/64 | hard_pool=21 | train_loss=0.663654 | defect_dice=0.605934 | defect_iou=0.458338 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.336923 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (42/64).
+epoch 20/50 | random_normal=45 | hard_normal=42/64 | hard_pool=21 | train_loss=0.663580 | defect_dice=0.619641 | defect_iou=0.473137 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.180359 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 21/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.662453 | defect_dice=0.618122 | defect_iou=0.471841 | defect_recall=1.000000 | normal_fpr=0.428571 | normal_fp=6/14 | thr=0.50 | min_area=0 | stage2_score=-0.039021 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 22/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.662345 | defect_dice=0.584290 | defect_iou=0.439177 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.358567 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (46/64).
+epoch 23/50 | random_normal=45 | hard_normal=46/64 | hard_pool=23 | train_loss=0.662996 | defect_dice=0.586625 | defect_iou=0.440816 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.213375 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (46/64).
+epoch 24/50 | random_normal=45 | hard_normal=46/64 | hard_pool=23 | train_loss=0.662502 | defect_dice=0.582848 | defect_iou=0.435581 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.217152 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (38/64).
+epoch 25/50 | random_normal=45 | hard_normal=38/64 | hard_pool=19 | train_loss=0.661720 | defect_dice=0.600580 | defect_iou=0.453612 | defect_recall=1.000000 | normal_fpr=0.428571 | normal_fp=6/14 | thr=0.50 | min_area=0 | stage2_score=-0.056563 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (38/64).
+epoch 26/50 | random_normal=45 | hard_normal=38/64 | hard_pool=19 | train_loss=0.661510 | defect_dice=0.631635 | defect_iou=0.487374 | defect_recall=1.000000 | normal_fpr=0.357143 | normal_fp=5/14 | thr=0.50 | min_area=0 | stage2_score=0.117349 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 27/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.661500 | defect_dice=0.544329 | defect_iou=0.396769 | defect_recall=1.000000 | normal_fpr=0.642857 | normal_fp=9/14 | thr=0.50 | min_area=0 | stage2_score=-0.541386 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (34/64).
+epoch 28/50 | random_normal=45 | hard_normal=34/64 | hard_pool=17 | train_loss=0.661686 | defect_dice=0.557689 | defect_iou=0.408895 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.385168 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (54/64).
+epoch 29/50 | random_normal=45 | hard_normal=54/64 | hard_pool=27 | train_loss=0.661827 | defect_dice=0.609564 | defect_iou=0.461679 | defect_recall=1.000000 | normal_fpr=0.428571 | normal_fp=6/14 | thr=0.50 | min_area=0 | stage2_score=-0.047579 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (54/64).
+epoch 30/50 | random_normal=45 | hard_normal=54/64 | hard_pool=27 | train_loss=0.661380 | defect_dice=0.616238 | defect_iou=0.469618 | defect_recall=1.000000 | normal_fpr=0.500000 | normal_fp=7/14 | thr=0.50 | min_area=0 | stage2_score=-0.183762 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (36/64).
+epoch 31/50 | random_normal=45 | hard_normal=36/64 | hard_pool=18 | train_loss=0.660359 | defect_dice=0.598915 | defect_iou=0.452060 | defect_recall=1.000000 | normal_fpr=0.642857 | normal_fp=9/14 | thr=0.50 | min_area=0 | stage2_score=-0.486799 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (36/64).
+epoch 32/50 | random_normal=45 | hard_normal=36/64 | hard_pool=18 | train_loss=0.659533 | defect_dice=0.585841 | defect_iou=0.438784 | defect_recall=1.000000 | normal_fpr=0.642857 | normal_fp=9/14 | thr=0.50 | min_area=0 | stage2_score=-0.499873 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (52/64).
+epoch 33/50 | random_normal=45 | hard_normal=52/64 | hard_pool=26 | train_loss=0.660597 | defect_dice=0.582889 | defect_iou=0.436411 | defect_recall=1.000000 | normal_fpr=0.642857 | normal_fp=9/14 | thr=0.50 | min_area=0 | stage2_score=-0.502825 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (52/64).
+epoch 34/50 | random_normal=45 | hard_normal=52/64 | hard_pool=26 | train_loss=0.660988 | defect_dice=0.591388 | defect_iou=0.445039 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.351469 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (52/64).
+epoch 35/50 | random_normal=45 | hard_normal=52/64 | hard_pool=26 | train_loss=0.660926 | defect_dice=0.601502 | defect_iou=0.455714 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.341356 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (52/64).
+epoch 36/50 | random_normal=45 | hard_normal=52/64 | hard_pool=26 | train_loss=0.660055 | defect_dice=0.600781 | defect_iou=0.455120 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.342076 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (46/64).
+epoch 37/50 | random_normal=45 | hard_normal=46/64 | hard_pool=23 | train_loss=0.659569 | defect_dice=0.599107 | defect_iou=0.453373 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.343750 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (46/64).
+epoch 38/50 | random_normal=45 | hard_normal=46/64 | hard_pool=23 | train_loss=0.659549 | defect_dice=0.594468 | defect_iou=0.448382 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.348389 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (50/64).
+epoch 39/50 | random_normal=45 | hard_normal=50/64 | hard_pool=25 | train_loss=0.660560 | defect_dice=0.587793 | defect_iou=0.441175 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.355064 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (50/64).
+epoch 40/50 | random_normal=45 | hard_normal=50/64 | hard_pool=25 | train_loss=0.659603 | defect_dice=0.600852 | defect_iou=0.454953 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.342005 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (50/64).
+epoch 41/50 | random_normal=45 | hard_normal=50/64 | hard_pool=25 | train_loss=0.659532 | defect_dice=0.607273 | defect_iou=0.461489 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.335584 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch (50/64).
+epoch 42/50 | random_normal=45 | hard_normal=50/64 | hard_pool=25 | train_loss=0.659310 | defect_dice=0.603938 | defect_iou=0.458131 | defect_recall=1.000000 | normal_fpr=0.571429 | normal_fp=8/14 | thr=0.50 | min_area=0 | stage2_score=-0.338919 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+early stopping triggered, stage2 stopped early.
+automatic validation export finished.
+stage2 training finished.
+stage2 fold=3 gpu=3 finished 2026-05-09T18:33:19+02:00

@@ -1,0 +1,38 @@
+{
+  "val": {
+    "split": "val",
+    "conf": 0.1,
+    "precision_iou50": 0.7205882352941176,
+    "recall_iou50": 0.9074074074074074,
+    "tp": 49,
+    "fp": 19,
+    "fn": 5,
+    "normal_images": 16,
+    "normal_fp_images": 0,
+    "normal_fp_rate": 0.0,
+    "defect_images": 54,
+    "defect_hit_images": 53,
+    "defect_image_recall_any_box": 0.9814814814814815,
+    "total_pred_boxes": 68,
+    "normal_pred_boxes": 0,
+    "defect_pred_boxes": 68
+  },
+  "test": {
+    "split": "test",
+    "conf": 0.05,
+    "precision_iou50": 0.620253164556962,
+    "recall_iou50": 0.9423076923076923,
+    "tp": 49,
+    "fp": 30,
+    "fn": 3,
+    "normal_images": 15,
+    "normal_fp_images": 0,
+    "normal_fp_rate": 0.0,
+    "defect_images": 52,
+    "defect_hit_images": 52,
+    "defect_image_recall_any_box": 1.0,
+    "total_pred_boxes": 79,
+    "normal_pred_boxes": 0,
+    "defect_pred_boxes": 79
+  }
+}

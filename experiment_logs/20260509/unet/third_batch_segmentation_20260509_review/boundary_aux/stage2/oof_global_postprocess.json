@@ -1,0 +1,35 @@
+{
+  "defect_dice": 0.7558835289011623,
+  "defect_iou": 0.6330330092152974,
+  "defect_image_recall": 0.995260663507109,
+  "normal_fpr": 0.03389830508474576,
+  "normal_fp_count": 2,
+  "normal_fp_pixel_sum": 123.0,
+  "normal_fp_pixel_mean": 2.0847457627118646,
+  "normal_fp_pixel_median": 0.0,
+  "normal_fp_pixel_p95": 0.0,
+  "normal_largest_fp_area_mean": 1.271186440677966,
+  "normal_largest_fp_area_median": 0.0,
+  "normal_largest_fp_area_p95": 0.0,
+  "normal_largest_fp_area_max": 40.0,
+  "defect_count": 211,
+  "normal_count": 59,
+  "threshold": 0.82,
+  "min_area": 0,
+  "stage2_score": 0.7558835289011623,
+  "folds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "checkpoint_paths": {
+    "0": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_pw12_boundary_20260509/stage2/fold0/best_stage2.pt",
+    "1": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_pw12_boundary_20260509/stage2/fold1/best_stage2.pt",
+    "2": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_pw12_boundary_20260509/stage2/fold2/best_stage2.pt",
+    "3": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_pw12_boundary_20260509/stage2/fold3/best_stage2.pt"
+  },
+  "target_normal_fpr": 0.1,
+  "lambda_fpr_penalty": 2.0,
+  "config_path": "configs/stage2_p0_a40_e50_bs48_pw12_boundary.yaml"
+}

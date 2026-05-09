@@ -1,0 +1,125 @@
+{
+  "label": {
+    "train": {
+      "images": 200,
+      "label_boxes": 157,
+      "empty_images": 43,
+      "invalid_boxes": 0,
+      "tiny_boxes": 0,
+      "duplicate_label_pairs_iou80": 0,
+      "images_with_duplicate_labels": 0
+    },
+    "val": {
+      "images": 70,
+      "label_boxes": 54,
+      "empty_images": 16,
+      "invalid_boxes": 0,
+      "tiny_boxes": 0,
+      "duplicate_label_pairs_iou80": 0,
+      "images_with_duplicate_labels": 0
+    },
+    "test": {
+      "images": 67,
+      "label_boxes": 52,
+      "empty_images": 15,
+      "invalid_boxes": 0,
+      "tiny_boxes": 0,
+      "duplicate_label_pairs_iou80": 0,
+      "images_with_duplicate_labels": 0
+    }
+  },
+  "prediction": {
+    "val": {
+      "0.05": {
+        "tp": 51,
+        "fp": 30,
+        "fn": 3,
+        "precision": 0.6296296296296297,
+        "recall": 0.9444444444444444,
+        "normal_images": 16,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 14,
+        "images_with_duplicate_predictions": 12
+      },
+      "0.1": {
+        "tp": 50,
+        "fp": 27,
+        "fn": 4,
+        "precision": 0.6493506493506493,
+        "recall": 0.9259259259259259,
+        "normal_images": 16,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 12,
+        "images_with_duplicate_predictions": 11
+      },
+      "0.25": {
+        "tp": 49,
+        "fp": 16,
+        "fn": 5,
+        "precision": 0.7538461538461538,
+        "recall": 0.9074074074074074,
+        "normal_images": 16,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 6,
+        "images_with_duplicate_predictions": 5
+      },
+      "0.5": {
+        "tp": 46,
+        "fp": 9,
+        "fn": 8,
+        "precision": 0.8363636363636363,
+        "recall": 0.8518518518518519,
+        "normal_images": 16,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 3,
+        "images_with_duplicate_predictions": 2
+      }
+    },
+    "test": {
+      "0.05": {
+        "tp": 50,
+        "fp": 32,
+        "fn": 2,
+        "precision": 0.6097560975609756,
+        "recall": 0.9615384615384616,
+        "normal_images": 15,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 13,
+        "images_with_duplicate_predictions": 10
+      },
+      "0.1": {
+        "tp": 50,
+        "fp": 25,
+        "fn": 2,
+        "precision": 0.6666666666666666,
+        "recall": 0.9615384615384616,
+        "normal_images": 15,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 9,
+        "images_with_duplicate_predictions": 7
+      },
+      "0.25": {
+        "tp": 48,
+        "fp": 14,
+        "fn": 4,
+        "precision": 0.7741935483870968,
+        "recall": 0.9230769230769231,
+        "normal_images": 15,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 4,
+        "images_with_duplicate_predictions": 4
+      },
+      "0.5": {
+        "tp": 47,
+        "fp": 8,
+        "fn": 5,
+        "precision": 0.8545454545454545,
+        "recall": 0.9038461538461539,
+        "normal_images": 15,
+        "normal_fp_images": 0,
+        "duplicate_pred_pairs_iou50": 3,
+        "images_with_duplicate_predictions": 3
+      }
+    }
+  }
+}
