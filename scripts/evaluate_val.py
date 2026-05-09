@@ -57,6 +57,8 @@ def build_threshold_grid(cfg):
     start = float(cfg.get("threshold_grid_start", 0.10))
     end = float(cfg.get("threshold_grid_end", 0.90))
     step = float(cfg.get("threshold_grid_step", 0.02))
+    if step <= 0:
+        raise ValueError("threshold_grid_step must be positive")
 
     values = []
     current = start
@@ -64,6 +66,9 @@ def build_threshold_grid(cfg):
     while current <= end + 1e-8:
         values.append(round(current, 6))
         current += step
+
+    if not values or abs(values[-1] - end) > 1e-8:
+        values.append(round(end, 6))
 
     return values
 

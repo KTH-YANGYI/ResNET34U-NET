@@ -208,6 +208,21 @@ Outputs go under:
 outputs/experiments/p0_a40_20260508/
 ```
 
+For the second P0 A40 Stage2 ablation batch, reuse the existing Stage1 checkpoints and run
+the three `pos_weight` variants sequentially. Each variant still runs folds `0,1,2,3` in
+parallel across the four GPUs, then runs pooled OOF post-processing with threshold search
+extended to `0.95`:
+
+```bash
+bash scripts/run_p0_a40_second_batch.sh
+```
+
+After hard-normal replay logs look stable, include the `normal_fp_loss_weight` variants:
+
+```bash
+RUN_NORMAL_FP=1 bash scripts/run_p0_a40_second_batch.sh
+```
+
 Useful variants:
 
 ```bash
