@@ -1,0 +1,3 @@
+sample_id,image_name,image_path,mask_path,json_path,sample_type,is_labeled,source_split,device,defect_class,holdout_reason,cv_fold,split,video_id,video_name,frame_id,is_hard_normal,hard_score,hard_fp_pixel_count,hard_largest_fp_area,hard_max_prob,source_epoch
+camera_normal_camera114,camera114.png,/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/dataset0505_crop640_roi/camera/normal/camera114.png,,,normal,False,trainval_pool,camera,normal,,0,trainval,,,,1,230000230.94873047,230,230,0.94873046875,32
+camera_normal_camera108,camera108.png,/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/dataset0505_crop640_roi/camera/normal/camera108.png,,,normal,False,trainval_pool,camera,normal,,2,trainval,,,,1,116000116.94628906,116,116,0.9462890625,32

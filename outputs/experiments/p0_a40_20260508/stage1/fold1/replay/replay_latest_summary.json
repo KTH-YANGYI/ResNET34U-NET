@@ -1,0 +1,14 @@
+{
+  "source_epoch": 30,
+  "total_count": 126,
+  "count_by_type": {
+    "replay_defect_negative_fp": 14,
+    "replay_normal_negative_fp": 22,
+    "replay_positive_hard": 90
+  },
+  "count_by_source_family": {
+    "defect_negative": 14,
+    "normal_negative": 22,
+    "positive": 90
+  }
+}

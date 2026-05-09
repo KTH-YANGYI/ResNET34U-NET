@@ -1,0 +1,1 @@
+sample_id,image_name,image_path,mask_path,json_path,sample_type,is_labeled,source_split,device,defect_class,holdout_reason,cv_fold,split,video_id,video_name,frame_id,is_hard_normal,hard_score,hard_fp_pixel_count,hard_largest_fp_area,hard_max_prob,source_epoch

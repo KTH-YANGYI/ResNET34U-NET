@@ -1,0 +1,2 @@
+sample_id,image_name,image_path,mask_path,json_path,sample_type,is_labeled,source_split,device,defect_class,holdout_reason,cv_fold,split,video_id,video_name,frame_id,is_hard_normal,hard_score,hard_fp_pixel_count,hard_largest_fp_area,hard_max_prob,source_epoch
+camera_normal_camera015,camera015.png,/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/dataset0505_crop640_roi/camera/normal/camera015.png,,,normal,False,trainval_pool,camera,normal,,1,trainval,,,,1,333000333.9633789,333,333,0.96337890625,12

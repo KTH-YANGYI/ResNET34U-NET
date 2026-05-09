@@ -1,0 +1,34 @@
+stage2 fold=2 gpu=2 started 2026-05-09T01:05:16+02:00
+fold = 2
+device = cuda
+stage1_checkpoint = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_20260508/stage1/fold2/best_stage1.pt
+defect_train_count = 159
+defect_val_count = 52
+normal_train_count = 45
+normal_val_count = 14
+save_dir = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_e50_bs48_20260509/stage2/fold2
+epoch 1/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.609951 | defect_dice=0.778605 | defect_iou=0.655606 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.82 | min_area=24 | stage2_score=0.778605 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 2/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.607595 | defect_dice=0.791925 | defect_iou=0.665720 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.90 | min_area=24 | stage2_score=0.791925 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 3/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.606247 | defect_dice=0.781890 | defect_iou=0.659926 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=0 | stage2_score=0.781890 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 4/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.605117 | defect_dice=0.792480 | defect_iou=0.667551 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.90 | min_area=24 | stage2_score=0.792480 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 5/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.604318 | defect_dice=0.803010 | defect_iou=0.680227 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.90 | min_area=32 | stage2_score=0.803010 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 6/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.603174 | defect_dice=0.780447 | defect_iou=0.653820 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=8 | stage2_score=0.780447 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 7/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.602394 | defect_dice=0.775315 | defect_iou=0.657162 | defect_recall=0.961538 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=48 | stage2_score=0.775315 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 8/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.601174 | defect_dice=0.773332 | defect_iou=0.654964 | defect_recall=0.961538 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.82 | min_area=32 | stage2_score=0.773332 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 9/50 | random_normal=45 | hard_normal=64 | hard_pool=1 | train_loss=0.606483 | defect_dice=0.791784 | defect_iou=0.672575 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=8 | stage2_score=0.791784 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 10/50 | random_normal=45 | hard_normal=64 | hard_pool=1 | train_loss=0.605096 | defect_dice=0.797727 | defect_iou=0.678181 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=24 | stage2_score=0.797727 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 11/50 | random_normal=45 | hard_normal=64 | hard_pool=2 | train_loss=0.604173 | defect_dice=0.789866 | defect_iou=0.670464 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=16 | stage2_score=0.789866 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 12/50 | random_normal=45 | hard_normal=64 | hard_pool=2 | train_loss=0.604002 | defect_dice=0.793129 | defect_iou=0.673682 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=8 | stage2_score=0.793129 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 13/50 | random_normal=45 | hard_normal=64 | hard_pool=1 | train_loss=0.603142 | defect_dice=0.799949 | defect_iou=0.680689 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=16 | stage2_score=0.799949 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 14/50 | random_normal=45 | hard_normal=64 | hard_pool=1 | train_loss=0.602493 | defect_dice=0.802797 | defect_iou=0.683005 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=24 | stage2_score=0.802797 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 15/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.596229 | defect_dice=0.799181 | defect_iou=0.679280 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.90 | min_area=16 | stage2_score=0.799181 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 16/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.595640 | defect_dice=0.795774 | defect_iou=0.675181 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=16 | stage2_score=0.795774 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 17/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.595626 | defect_dice=0.793087 | defect_iou=0.676115 | defect_recall=0.980769 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.90 | min_area=24 | stage2_score=0.793087 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 18/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.594546 | defect_dice=0.791807 | defect_iou=0.675266 | defect_recall=0.980769 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.88 | min_area=24 | stage2_score=0.791807 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 19/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.594482 | defect_dice=0.793203 | defect_iou=0.677024 | defect_recall=0.980769 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=24 | stage2_score=0.793203 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 20/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.594224 | defect_dice=0.795809 | defect_iou=0.675314 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.84 | min_area=8 | stage2_score=0.795809 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 21/50 | random_normal=45 | hard_normal=0 | hard_pool=0 | train_loss=0.594265 | defect_dice=0.795583 | defect_iou=0.676068 | defect_recall=1.000000 | normal_fpr=0.000000 | normal_fp=0/14 | thr=0.86 | min_area=8 | stage2_score=0.795583 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+early stopping triggered, stage2 stopped early.
+automatic validation export finished.
+stage2 training finished.
+stage2 fold=2 gpu=2 finished 2026-05-09T01:47:38+02:00
