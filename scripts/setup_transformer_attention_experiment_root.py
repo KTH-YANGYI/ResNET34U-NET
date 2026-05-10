@@ -50,7 +50,7 @@ def parse_args():
 
 
 def git_output(args, cwd):
-    return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
+    return subprocess.check_output(["git", *args], cwd=cwd, universal_newlines=True).strip()
 
 
 def write_text(path, text):
