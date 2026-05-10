@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from src.datasets import ROIDataset, build_stage2_eval_transform
-from src.model import build_model
+from src.model import build_model_from_config
 from src.samples import load_samples, split_samples_for_fold
 from src.trainer import load_checkpoint, validate_stage2
 from src.utils import load_yaml, read_csv_rows, save_json, write_csv_rows
@@ -41,6 +41,7 @@ def apply_fold_overrides(cfg, fold):
         ("defect_val_manifest_template", "defect_val_manifest"),
         ("normal_val_manifest_template", "normal_val_manifest"),
         ("save_dir_template", "save_dir"),
+        ("prototype_bank_path_template", "prototype_bank_path"),
     ]
 
     for template_key, target_key in template_keys:
@@ -113,11 +114,7 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(
-        pretrained=False,
-        deep_supervision=bool(cfg.get("deep_supervision_enable", False)),
-        boundary_aux=bool(cfg.get("boundary_aux_enable", False)),
-    )
+    model = build_model_from_config(cfg)
     model.to(device)
 
     save_dir = resolve_path(cfg["save_dir"])
@@ -140,6 +137,7 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
         progress_desc=None if progress_desc is None else f"{progress_desc} raw",
+        include_auprc=True,
     )
 
     post_result = validate_stage2(
@@ -151,6 +149,7 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
         progress_desc=None if progress_desc is None else f"{progress_desc} post",
+        include_auprc=True,
     )
 
     checkpoint_best = checkpoint.get("best_stage2_result", {})
@@ -171,6 +170,17 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         "raw_normal_largest_fp_area_median": float(raw_result["normal_largest_fp_area_median"]),
         "raw_normal_largest_fp_area_p95": float(raw_result["normal_largest_fp_area_p95"]),
         "raw_normal_largest_fp_area_max": float(raw_result["normal_largest_fp_area_max"]),
+        "raw_pixel_precision_defect_macro": float(raw_result["pixel_precision_defect_macro"]),
+        "raw_pixel_recall_defect_macro": float(raw_result["pixel_recall_defect_macro"]),
+        "raw_pixel_f1_defect_macro": float(raw_result["pixel_f1_defect_macro"]),
+        "raw_pixel_precision_labeled_micro": float(raw_result["pixel_precision_labeled_micro"]),
+        "raw_pixel_recall_labeled_micro": float(raw_result["pixel_recall_labeled_micro"]),
+        "raw_pixel_f1_labeled_micro": float(raw_result["pixel_f1_labeled_micro"]),
+        "raw_pixel_auprc_all_labeled": float(raw_result["pixel_auprc_all_labeled"]),
+        "raw_component_recall_3px": float(raw_result["component_recall_3px"]),
+        "raw_component_precision_3px": float(raw_result["component_precision_3px"]),
+        "raw_component_f1_3px": float(raw_result["component_f1_3px"]),
+        "raw_boundary_f1_3px": float(raw_result["boundary_f1_3px"]),
         "raw_threshold": float(raw_result["threshold"]),
         "raw_min_area": int(raw_result["min_area"]),
         "defect_dice": float(post_result["defect_dice"]),
@@ -186,6 +196,17 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         "normal_largest_fp_area_median": float(post_result["normal_largest_fp_area_median"]),
         "normal_largest_fp_area_p95": float(post_result["normal_largest_fp_area_p95"]),
         "normal_largest_fp_area_max": float(post_result["normal_largest_fp_area_max"]),
+        "pixel_precision_defect_macro": float(post_result["pixel_precision_defect_macro"]),
+        "pixel_recall_defect_macro": float(post_result["pixel_recall_defect_macro"]),
+        "pixel_f1_defect_macro": float(post_result["pixel_f1_defect_macro"]),
+        "pixel_precision_labeled_micro": float(post_result["pixel_precision_labeled_micro"]),
+        "pixel_recall_labeled_micro": float(post_result["pixel_recall_labeled_micro"]),
+        "pixel_f1_labeled_micro": float(post_result["pixel_f1_labeled_micro"]),
+        "pixel_auprc_all_labeled": float(post_result["pixel_auprc_all_labeled"]),
+        "component_recall_3px": float(post_result["component_recall_3px"]),
+        "component_precision_3px": float(post_result["component_precision_3px"]),
+        "component_f1_3px": float(post_result["component_f1_3px"]),
+        "boundary_f1_3px": float(post_result["boundary_f1_3px"]),
         "threshold": float(post_result["threshold"]),
         "min_area": int(post_result["min_area"]),
         "stage2_score": float(post_result["stage2_score"]),
@@ -210,6 +231,18 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         "min_area",
         "fp_pixel_count",
         "largest_fp_component_area",
+        "pixel_precision",
+        "pixel_recall",
+        "pixel_f1",
+        "tp_pixel_count",
+        "fp_pixel_count_for_metric",
+        "fn_pixel_count",
+        "pred_pixel_count",
+        "target_pixel_count",
+        "component_recall_3px",
+        "component_precision_3px",
+        "component_f1_3px",
+        "boundary_f1_3px",
     ]
     write_csv_rows(save_dir / "val_per_image.csv", post_result["per_image_rows"], per_image_fieldnames)
 
@@ -230,6 +263,17 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         "normal_largest_fp_area_median",
         "normal_largest_fp_area_p95",
         "normal_largest_fp_area_max",
+        "pixel_precision_defect_macro",
+        "pixel_recall_defect_macro",
+        "pixel_f1_defect_macro",
+        "pixel_precision_labeled_micro",
+        "pixel_recall_labeled_micro",
+        "pixel_f1_labeled_micro",
+        "pixel_auprc_all_labeled",
+        "component_recall_3px",
+        "component_precision_3px",
+        "component_f1_3px",
+        "boundary_f1_3px",
         "stage2_score",
     ]
     write_csv_rows(save_dir / "val_postprocess_search.csv", post_result["search_rows"], search_fieldnames)

@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torchvision.models import ResNet34_Weights, resnet34
+from src.prototype_memory import load_prototype_bank
+from src.transformer_blocks import PrototypeCrossAttention, SkipAttentionGate, TransformerBottleneck
 
 class ConvBlock(nn.Module):
     """
@@ -56,11 +58,30 @@ def make_aux_head(in_channels, mid_channels=32):
 
 class UNetResNet34(nn.Module):
     """ 编码器用RESNET34, 解码器用unet解码器的分割模型实现"""
-    def __init__(self, encoder_weights=None, deep_supervision=False, boundary_aux=False):
+    def __init__(
+        self,
+        encoder_weights=None,
+        deep_supervision=False,
+        boundary_aux=False,
+        transformer_bottleneck_enable=False,
+        transformer_bottleneck_layers=0,
+        transformer_bottleneck_heads=8,
+        transformer_bottleneck_dropout=0.1,
+        prototype_attention_enable=False,
+        prototype_bank_path="",
+        prototype_attention_heads=8,
+        prototype_attention_dropout=0.1,
+        skip_attention_enable=False,
+        skip_attention_levels=None,
+    ):
         super().__init__()
         self._encoder_trainable = True
         self.deep_supervision = bool(deep_supervision)
         self.boundary_aux = bool(boundary_aux)
+        self.transformer_bottleneck_enable = bool(transformer_bottleneck_enable)
+        self.prototype_attention_enable = bool(prototype_attention_enable)
+        self.skip_attention_enable = bool(skip_attention_enable)
+        self.skip_attention_levels = set(skip_attention_levels or ["d4", "d3"])
 
         #======================================================================================
         #构建Resnet编码器
@@ -84,6 +105,27 @@ class UNetResNet34(nn.Module):
         ####################################################################################
         #bottleneck
         self.center = ConvBlock(512,512)
+        if self.transformer_bottleneck_enable and int(transformer_bottleneck_layers) > 0:
+            self.transformer_bottleneck = TransformerBottleneck(
+                channels=512,
+                num_layers=int(transformer_bottleneck_layers),
+                num_heads=int(transformer_bottleneck_heads),
+                dropout=float(transformer_bottleneck_dropout),
+            )
+        else:
+            self.transformer_bottleneck = None
+
+        if self.prototype_attention_enable:
+            bank = load_prototype_bank(prototype_bank_path, map_location="cpu")
+            self.prototype_attention = PrototypeCrossAttention(
+                pos_prototypes=bank["pos_prototypes"],
+                neg_prototypes=bank["neg_prototypes"],
+                channels=512,
+                num_heads=int(prototype_attention_heads),
+                dropout=float(prototype_attention_dropout),
+            )
+        else:
+            self.prototype_attention = None
 
 
         #=======================================================================
@@ -92,6 +134,16 @@ class UNetResNet34(nn.Module):
         self.decoder3 = DecoderBlock(in_channels=256, skip_channels=128, out_channels=128)
         self.decoder2 = DecoderBlock(in_channels=128, skip_channels=64, out_channels=64)
         self.decoder1 = DecoderBlock(in_channels=64, skip_channels=64, out_channels=64)
+        self.skip_gate_d4 = (
+            SkipAttentionGate(skip_channels=256, gate_channels=512)
+            if self.skip_attention_enable and "d4" in self.skip_attention_levels
+            else None
+        )
+        self.skip_gate_d3 = (
+            SkipAttentionGate(skip_channels=128, gate_channels=256)
+            if self.skip_attention_enable and "d3" in self.skip_attention_levels
+            else None
+        )
 
         self.segmentation_head = nn.Sequential(
             nn.Conv2d(64,32, kernel_size=3, padding=1, bias=False),
@@ -136,17 +188,22 @@ class UNetResNet34(nn.Module):
             
         modules = [
             self.center,
+            self.transformer_bottleneck,
+            self.prototype_attention,
             self.decoder4,
             self.decoder3,
             self.decoder2,
             self.decoder1,
+            self.skip_gate_d4,
+            self.skip_gate_d3,
             self.segmentation_head,
             self.deep_supervision_heads,
             ]
         if self.boundary_head is not None:
             modules.append(self.boundary_head)
         for module in modules:
-            yield from module.parameters()
+            if module is not None:
+                yield from module.parameters()
 
     def set_encoder_trainable(self, trainable:bool):
         self._encoder_trainable = bool(trainable)
@@ -169,8 +226,15 @@ class UNetResNet34(nn.Module):
         x3=self.encoder_layer3(x2)
         x4 = self.encoder_layer4(x3)
         x4 = self.center(x4)
-        d4 = self.decoder4(x4, x3)
-        d3 = self.decoder3(d4, x2)
+        if self.transformer_bottleneck is not None:
+            x4 = self.transformer_bottleneck(x4)
+        if self.prototype_attention is not None:
+            x4 = self.prototype_attention(x4)
+
+        skip3 = self.skip_gate_d4(x3, x4) if self.skip_gate_d4 is not None else x3
+        d4 = self.decoder4(x4, skip3)
+        skip2 = self.skip_gate_d3(x2, d4) if self.skip_gate_d3 is not None else x2
+        d3 = self.decoder3(d4, skip2)
         d2 = self.decoder2(d3, x1)
         d1 = self.decoder1(d2, x0)
         d1 = F.interpolate(
@@ -206,7 +270,21 @@ class UNetResNet34(nn.Module):
        
 
 
-def build_model(pretrained=True, deep_supervision=False, boundary_aux=False):
+def build_model(
+    pretrained=True,
+    deep_supervision=False,
+    boundary_aux=False,
+    transformer_bottleneck_enable=False,
+    transformer_bottleneck_layers=0,
+    transformer_bottleneck_heads=8,
+    transformer_bottleneck_dropout=0.1,
+    prototype_attention_enable=False,
+    prototype_bank_path="",
+    prototype_attention_heads=8,
+    prototype_attention_dropout=0.1,
+    skip_attention_enable=False,
+    skip_attention_levels=None,
+):
     """
     构建模型实例。
     """
@@ -217,6 +295,16 @@ def build_model(pretrained=True, deep_supervision=False, boundary_aux=False):
             encoder_weights=None,
             deep_supervision=deep_supervision,
             boundary_aux=boundary_aux,
+            transformer_bottleneck_enable=transformer_bottleneck_enable,
+            transformer_bottleneck_layers=transformer_bottleneck_layers,
+            transformer_bottleneck_heads=transformer_bottleneck_heads,
+            transformer_bottleneck_dropout=transformer_bottleneck_dropout,
+            prototype_attention_enable=prototype_attention_enable,
+            prototype_bank_path=prototype_bank_path,
+            prototype_attention_heads=prototype_attention_heads,
+            prototype_attention_dropout=prototype_attention_dropout,
+            skip_attention_enable=skip_attention_enable,
+            skip_attention_levels=skip_attention_levels,
         )
         return model
 
@@ -227,6 +315,16 @@ def build_model(pretrained=True, deep_supervision=False, boundary_aux=False):
             encoder_weights=weights,
             deep_supervision=deep_supervision,
             boundary_aux=boundary_aux,
+            transformer_bottleneck_enable=transformer_bottleneck_enable,
+            transformer_bottleneck_layers=transformer_bottleneck_layers,
+            transformer_bottleneck_heads=transformer_bottleneck_heads,
+            transformer_bottleneck_dropout=transformer_bottleneck_dropout,
+            prototype_attention_enable=prototype_attention_enable,
+            prototype_bank_path=prototype_bank_path,
+            prototype_attention_heads=prototype_attention_heads,
+            prototype_attention_dropout=prototype_attention_dropout,
+            skip_attention_enable=skip_attention_enable,
+            skip_attention_levels=skip_attention_levels,
         )
         return model
 
@@ -240,5 +338,33 @@ def build_model(pretrained=True, deep_supervision=False, boundary_aux=False):
             encoder_weights=None,
             deep_supervision=deep_supervision,
             boundary_aux=boundary_aux,
+            transformer_bottleneck_enable=transformer_bottleneck_enable,
+            transformer_bottleneck_layers=transformer_bottleneck_layers,
+            transformer_bottleneck_heads=transformer_bottleneck_heads,
+            transformer_bottleneck_dropout=transformer_bottleneck_dropout,
+            prototype_attention_enable=prototype_attention_enable,
+            prototype_bank_path=prototype_bank_path,
+            prototype_attention_heads=prototype_attention_heads,
+            prototype_attention_dropout=prototype_attention_dropout,
+            skip_attention_enable=skip_attention_enable,
+            skip_attention_levels=skip_attention_levels,
         )
         return model
+
+
+def build_model_from_config(cfg):
+    return build_model(
+        pretrained=bool(cfg.get("pretrained", False)),
+        deep_supervision=bool(cfg.get("deep_supervision_enable", False)),
+        boundary_aux=bool(cfg.get("boundary_aux_enable", False)),
+        transformer_bottleneck_enable=bool(cfg.get("transformer_bottleneck_enable", False)),
+        transformer_bottleneck_layers=int(cfg.get("transformer_bottleneck_layers", 0)),
+        transformer_bottleneck_heads=int(cfg.get("transformer_bottleneck_heads", 8)),
+        transformer_bottleneck_dropout=float(cfg.get("transformer_bottleneck_dropout", 0.1)),
+        prototype_attention_enable=bool(cfg.get("prototype_attention_enable", False)),
+        prototype_bank_path=cfg.get("prototype_bank_path", ""),
+        prototype_attention_heads=int(cfg.get("prototype_attention_heads", cfg.get("transformer_bottleneck_heads", 8))),
+        prototype_attention_dropout=float(cfg.get("prototype_attention_dropout", cfg.get("transformer_bottleneck_dropout", 0.1))),
+        skip_attention_enable=bool(cfg.get("skip_attention_enable", False)),
+        skip_attention_levels=cfg.get("skip_attention_levels", ["d4", "d3"]),
+    )

@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.metrics import logits_to_probs, probs_to_binary_mask
-from src.model import build_model
+from src.model import build_model_from_config
 from src.samples import holdout_samples, load_samples
 from src.trainer import load_checkpoint, predict_on_loader
 from src.utils import ensure_dir, load_yaml, read_csv_rows, read_json, write_csv_rows
@@ -42,6 +42,8 @@ def apply_fold_overrides(cfg, fold):
 
     if "save_dir_template" in cfg:
         cfg["save_dir"] = str(cfg["save_dir_template"]).format(fold=fold)
+    if "prototype_bank_path_template" in cfg:
+        cfg["prototype_bank_path"] = str(cfg["prototype_bank_path_template"]).format(fold=fold)
 
     return cfg
 
@@ -137,11 +139,7 @@ def main():
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(
-        pretrained=False,
-        deep_supervision=bool(cfg.get("deep_supervision_enable", False)),
-        boundary_aux=bool(cfg.get("boundary_aux_enable", False)),
-    )
+    model = build_model_from_config(cfg)
     model.to(device)
 
     save_dir = resolve_path(cfg["save_dir"])

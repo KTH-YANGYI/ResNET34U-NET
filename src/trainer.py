@@ -125,6 +125,40 @@ def load_checkpoint(path, model, optimizer=None, scheduler=None, map_location="c
     return checkpoint
 
 
+def load_compatible_checkpoint(path, model, map_location="cpu"):
+    checkpoint = torch.load(path, map_location=map_location)
+    source_state = checkpoint["model_state_dict"]
+    model_state = model.state_dict()
+    compatible_state = {}
+    skipped = []
+
+    for key, value in source_state.items():
+        if key not in model_state:
+            skipped.append(key)
+            continue
+        if tuple(value.shape) != tuple(model_state[key].shape):
+            skipped.append(key)
+            continue
+        compatible_state[key] = value
+
+    missing, unexpected = model.load_state_dict(compatible_state, strict=False)
+    print(
+        "compatible checkpoint load | "
+        f"loaded={len(compatible_state)} | "
+        f"skipped={len(skipped)} | "
+        f"missing={len(missing)} | "
+        f"unexpected={len(unexpected)}"
+    )
+    if len(skipped) > 0:
+        print("first skipped keys:", ", ".join(skipped[:20]))
+    if len(missing) > 0:
+        print("first missing keys:", ", ".join(list(missing)[:20]))
+    if len(unexpected) > 0:
+        print("first unexpected keys:", ", ".join(list(unexpected)[:20]))
+
+    return checkpoint
+
+
 def build_amp_grad_scaler(device, enabled=True):
     enabled = bool(enabled) and device.type == "cuda"
     if not enabled:
@@ -415,6 +449,7 @@ def validate_stage2(
     lambda_fpr_penalty=2.0,
     progress_desc=None,
     amp_enabled=True,
+    include_auprc=False,
 ):
     from src.metrics import compute_stage2_score, evaluate_prob_maps, logits_to_probs, search_postprocess_params
 
@@ -451,6 +486,7 @@ def validate_stage2(
             image_names=image_names,
             threshold=threshold_values[0],
             min_area=min_area_values[0],
+            include_auprc=include_auprc,
         )
         result["stage2_score"] = compute_stage2_score(
             result,
@@ -469,6 +505,7 @@ def validate_stage2(
         min_area_values=min_area_values,
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
+        include_auprc=include_auprc,
     )
 
     best_result = search_output["best_result"]

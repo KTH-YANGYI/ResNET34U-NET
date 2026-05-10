@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.metrics import logits_to_probs, search_postprocess_params
-from src.model import build_model
+from src.model import build_model_from_config
 from src.trainer import load_checkpoint, predict_on_loader
 from src.utils import ensure_dir, load_yaml, save_json, write_csv_rows
 from scripts.evaluate_val import build_min_area_grid, build_threshold_grid, load_val_rows
@@ -54,6 +54,7 @@ def apply_fold_overrides(cfg, fold):
         ("defect_val_manifest_template", "defect_val_manifest"),
         ("normal_val_manifest_template", "normal_val_manifest"),
         ("save_dir_template", "save_dir"),
+        ("prototype_bank_path_template", "prototype_bank_path"),
     ]
 
     for template_key, target_key in template_keys:
@@ -100,11 +101,7 @@ def predict_fold(cfg, fold, device):
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(
-        pretrained=False,
-        deep_supervision=bool(fold_cfg.get("deep_supervision_enable", False)),
-        boundary_aux=bool(fold_cfg.get("boundary_aux_enable", False)),
-    )
+    model = build_model_from_config(fold_cfg)
     model.to(device)
 
     save_dir = resolve_path(fold_cfg["save_dir"])
@@ -190,6 +187,7 @@ def main():
         min_area_values=build_min_area_grid(cfg),
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
+        include_auprc=True,
     )
 
     best_result = search_output["best_result"]
@@ -230,6 +228,18 @@ def main():
         "min_area",
         "fp_pixel_count",
         "largest_fp_component_area",
+        "pixel_precision",
+        "pixel_recall",
+        "pixel_f1",
+        "tp_pixel_count",
+        "fp_pixel_count_for_metric",
+        "fn_pixel_count",
+        "pred_pixel_count",
+        "target_pixel_count",
+        "component_recall_3px",
+        "component_precision_3px",
+        "component_f1_3px",
+        "boundary_f1_3px",
     ]
     write_csv_rows(output_paths["per_image_csv"], per_image_rows, per_image_fieldnames)
 
@@ -250,6 +260,17 @@ def main():
         "normal_largest_fp_area_median",
         "normal_largest_fp_area_p95",
         "normal_largest_fp_area_max",
+        "pixel_precision_defect_macro",
+        "pixel_recall_defect_macro",
+        "pixel_f1_defect_macro",
+        "pixel_precision_labeled_micro",
+        "pixel_recall_labeled_micro",
+        "pixel_f1_labeled_micro",
+        "pixel_auprc_all_labeled",
+        "component_recall_3px",
+        "component_precision_3px",
+        "component_f1_3px",
+        "boundary_f1_3px",
         "stage2_score",
     ]
     write_csv_rows(output_paths["search_csv"], search_output["search_rows"], search_fieldnames)

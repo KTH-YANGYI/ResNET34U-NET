@@ -23,9 +23,9 @@ from src.mining import (
     sample_rows_with_frame_gap,
     save_stage2_hard_normal_outputs,
 )
-from src.model import build_model
+from src.model import build_model_from_config
 from src.samples import load_samples, split_samples_for_fold
-from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
+from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, load_compatible_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
 from scripts.evaluate_val import evaluate_and_save_stage2
 
@@ -67,6 +67,7 @@ def apply_fold_overrides(cfg, fold):
         ("normal_val_manifest_template", "normal_val_manifest"),
         ("stage1_checkpoint_template", "stage1_checkpoint"),
         ("save_dir_template", "save_dir"),
+        ("prototype_bank_path_template", "prototype_bank_path"),
     ]
 
     for template_key, target_key in template_keys:
@@ -355,6 +356,17 @@ def save_history_csv(path, history_rows):
         "normal_largest_fp_area_median",
         "normal_largest_fp_area_p95",
         "normal_largest_fp_area_max",
+        "pixel_precision_defect_macro",
+        "pixel_recall_defect_macro",
+        "pixel_f1_defect_macro",
+        "pixel_precision_labeled_micro",
+        "pixel_recall_labeled_micro",
+        "pixel_f1_labeled_micro",
+        "pixel_auprc_all_labeled",
+        "component_recall_3px",
+        "component_precision_3px",
+        "component_f1_3px",
+        "boundary_f1_3px",
         "threshold",
         "min_area",
         "stage2_score",
@@ -388,6 +400,17 @@ STAGE2_SUMMARY_KEYS = [
     "normal_largest_fp_area_median",
     "normal_largest_fp_area_p95",
     "normal_largest_fp_area_max",
+    "pixel_precision_defect_macro",
+    "pixel_recall_defect_macro",
+    "pixel_f1_defect_macro",
+    "pixel_precision_labeled_micro",
+    "pixel_recall_labeled_micro",
+    "pixel_f1_labeled_micro",
+    "pixel_auprc_all_labeled",
+    "component_recall_3px",
+    "component_precision_3px",
+    "component_f1_3px",
+    "boundary_f1_3px",
     "threshold",
     "min_area",
     "stage2_score",
@@ -419,22 +442,15 @@ def main():
 
     val_loader = build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device)
 
-    deep_supervision_enabled = bool(cfg.get("deep_supervision_enable", False))
-    boundary_aux_enabled = bool(cfg.get("boundary_aux_enable", False))
-    model = build_model(
-        pretrained=bool(cfg.get("pretrained", False)),
-        deep_supervision=deep_supervision_enabled,
-        boundary_aux=boundary_aux_enabled,
-    )
+    model = build_model_from_config(cfg)
     model.to(device)
 
     stage1_checkpoint_path = resolve_path(cfg["stage1_checkpoint"])
-    load_checkpoint(
-        stage1_checkpoint_path,
-        model,
-        map_location=device,
-        strict=not (deep_supervision_enabled or boundary_aux_enabled),
-    )
+    stage1_load_strict = bool(cfg.get("stage1_load_strict", True))
+    if stage1_load_strict:
+        load_checkpoint(stage1_checkpoint_path, model, map_location=device, strict=True)
+    else:
+        load_compatible_checkpoint(stage1_checkpoint_path, model, map_location=device)
 
     criterion = BCEDiceLoss(
         bce_weight=float(cfg.get("bce_weight", 0.5)),
@@ -557,6 +573,17 @@ def main():
                     "normal_largest_fp_area_median": val_stats["normal_largest_fp_area_median"],
                     "normal_largest_fp_area_p95": val_stats["normal_largest_fp_area_p95"],
                     "normal_largest_fp_area_max": val_stats["normal_largest_fp_area_max"],
+                    "pixel_precision_defect_macro": val_stats["pixel_precision_defect_macro"],
+                    "pixel_recall_defect_macro": val_stats["pixel_recall_defect_macro"],
+                    "pixel_f1_defect_macro": val_stats["pixel_f1_defect_macro"],
+                    "pixel_precision_labeled_micro": val_stats["pixel_precision_labeled_micro"],
+                    "pixel_recall_labeled_micro": val_stats["pixel_recall_labeled_micro"],
+                    "pixel_f1_labeled_micro": val_stats["pixel_f1_labeled_micro"],
+                    "pixel_auprc_all_labeled": val_stats["pixel_auprc_all_labeled"],
+                    "component_recall_3px": val_stats["component_recall_3px"],
+                    "component_precision_3px": val_stats["component_precision_3px"],
+                    "component_f1_3px": val_stats["component_f1_3px"],
+                    "boundary_f1_3px": val_stats["boundary_f1_3px"],
                     "threshold": val_stats["threshold"],
                     "min_area": val_stats["min_area"],
                     "stage2_score": val_stats["stage2_score"],

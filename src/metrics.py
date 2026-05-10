@@ -169,6 +169,151 @@ def iou_score(pred, target, eps=1e-6):
     return float((intersection + eps) / (union + eps))
 
 
+def _safe_divide(numerator, denominator, empty_value=0.0):
+    denominator = float(denominator)
+    if denominator == 0.0:
+        return float(empty_value)
+    return float(numerator) / denominator
+
+
+def pixel_confusion(pred, target):
+    pred = _to_binary_mask(pred).astype(bool)
+    target = _to_binary_mask(target).astype(bool)
+    tp = int(np.logical_and(pred, target).sum())
+    fp = int(np.logical_and(pred, np.logical_not(target)).sum())
+    fn = int(np.logical_and(np.logical_not(pred), target).sum())
+    return tp, fp, fn
+
+
+def precision_recall_f1_from_counts(tp, fp, fn):
+    precision = _safe_divide(tp, tp + fp, empty_value=1.0)
+    recall = _safe_divide(tp, tp + fn, empty_value=1.0)
+    f1 = _safe_divide(2.0 * tp, 2.0 * tp + fp + fn, empty_value=1.0)
+    return precision, recall, f1
+
+
+def average_precision_from_prob_maps(prob_maps, gt_masks):
+    labels = []
+    scores = []
+    for prob_map, gt_mask in zip(prob_maps, gt_masks):
+        labels.append(_to_binary_mask(gt_mask).reshape(-1).astype(np.uint8))
+        scores.append(_squeeze_to_hw(prob_map).reshape(-1).astype(np.float32))
+
+    if len(labels) == 0:
+        return 0.0
+
+    y_true = np.concatenate(labels)
+    y_score = np.concatenate(scores)
+    positive_count = int(y_true.sum())
+    if positive_count == 0:
+        return 0.0
+
+    order = np.argsort(-y_score, kind="mergesort")
+    y_true_sorted = y_true[order]
+    tp_cumsum = np.cumsum(y_true_sorted)
+    ranks = np.arange(1, len(y_true_sorted) + 1, dtype=np.float64)
+    precision_at_rank = tp_cumsum / ranks
+    return float(precision_at_rank[y_true_sorted.astype(bool)].sum() / positive_count)
+
+
+def _dilate_binary(mask, iterations=1):
+    mask = _to_binary_mask(mask).astype(bool)
+    iterations = max(0, int(iterations))
+    if iterations == 0:
+        return mask
+
+    if scipy_ndimage is not None:
+        structure = np.ones((3, 3), dtype=np.uint8)
+        return scipy_ndimage.binary_dilation(mask, structure=structure, iterations=iterations)
+
+    output = mask
+    for _ in range(iterations):
+        padded = np.pad(output, 1, mode="constant", constant_values=False)
+        expanded = np.zeros_like(output, dtype=bool)
+        for dy in range(3):
+            for dx in range(3):
+                expanded |= padded[dy:dy + output.shape[0], dx:dx + output.shape[1]]
+        output = expanded
+    return output
+
+
+def _erode_binary(mask, iterations=1):
+    mask = _to_binary_mask(mask).astype(bool)
+    iterations = max(0, int(iterations))
+    if iterations == 0:
+        return mask
+
+    if scipy_ndimage is not None:
+        structure = np.ones((3, 3), dtype=np.uint8)
+        return scipy_ndimage.binary_erosion(mask, structure=structure, iterations=iterations)
+
+    output = mask
+    for _ in range(iterations):
+        padded = np.pad(output, 1, mode="constant", constant_values=False)
+        eroded = np.ones_like(output, dtype=bool)
+        for dy in range(3):
+            for dx in range(3):
+                eroded &= padded[dy:dy + output.shape[0], dx:dx + output.shape[1]]
+        output = eroded
+    return output
+
+
+def component_metrics(pred, target, tolerance_px=3):
+    pred = _to_binary_mask(pred)
+    target = _to_binary_mask(target)
+    pred_labels, pred_areas = label_components(pred)
+    target_labels, target_areas = label_components(target)
+
+    gt_count = len(target_areas)
+    pred_count = len(pred_areas)
+    if gt_count == 0 and pred_count == 0:
+        return 1.0, 1.0, 1.0
+    if gt_count == 0:
+        return 0.0, 0.0, 0.0
+
+    pred_dilated = _dilate_binary(pred, iterations=tolerance_px)
+    target_dilated = _dilate_binary(target, iterations=tolerance_px)
+    detected_gt = 0
+    detected_pred = 0
+
+    for label_index in range(1, gt_count + 1):
+        gt_component = target_labels == label_index
+        if bool(np.logical_and(pred_dilated, gt_component).any()):
+            detected_gt += 1
+
+    for label_index in range(1, pred_count + 1):
+        pred_component = pred_labels == label_index
+        if bool(np.logical_and(target_dilated, pred_component).any()):
+            detected_pred += 1
+
+    recall = _safe_divide(detected_gt, gt_count, empty_value=1.0)
+    precision = _safe_divide(detected_pred, pred_count, empty_value=1.0)
+    f1 = _safe_divide(2.0 * precision * recall, precision + recall, empty_value=0.0)
+    return recall, precision, f1
+
+
+def boundary_f1_score(pred, target, tolerance_px=3):
+    pred = _to_binary_mask(pred)
+    target = _to_binary_mask(target)
+    if int(pred.sum()) == 0 and int(target.sum()) == 0:
+        return 1.0
+    if int(pred.sum()) == 0 or int(target.sum()) == 0:
+        return 0.0
+
+    pred_boundary = pred.astype(bool) ^ _erode_binary(pred, iterations=1)
+    target_boundary = target.astype(bool) ^ _erode_binary(target, iterations=1)
+    if int(pred_boundary.sum()) == 0 and int(target_boundary.sum()) == 0:
+        return 1.0
+    if int(pred_boundary.sum()) == 0 or int(target_boundary.sum()) == 0:
+        return 0.0
+
+    pred_match = np.logical_and(pred_boundary, _dilate_binary(target_boundary, iterations=tolerance_px)).sum()
+    target_match = np.logical_and(target_boundary, _dilate_binary(pred_boundary, iterations=tolerance_px)).sum()
+    precision = _safe_divide(pred_match, pred_boundary.sum(), empty_value=0.0)
+    recall = _safe_divide(target_match, target_boundary.sum(), empty_value=0.0)
+    return _safe_divide(2.0 * precision * recall, precision + recall, empty_value=0.0)
+
+
 def compute_stage2_score(metrics, target_normal_fpr=0.10, lambda_fpr_penalty=2.0):
     defect_dice = float(metrics.get("defect_dice", 0.0))
     normal_fpr = float(metrics.get("normal_fpr", 0.0))
@@ -253,15 +398,35 @@ def summarize_metrics(per_image_rows):
     defect_dice_values = []
     defect_iou_values = []
     defect_recall_hits = []
+    defect_pixel_precision_values = []
+    defect_pixel_recall_values = []
+    defect_pixel_f1_values = []
+    defect_component_recall_values = []
+    defect_component_precision_values = []
+    defect_component_f1_values = []
+    defect_boundary_f1_values = []
     normal_false_positive_hits = []
     normal_fp_pixels = []
     normal_largest_fp_areas = []
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
 
     for row in per_image_rows:
+        total_tp += int(row.get("tp_pixel_count", 0))
+        total_fp += int(row.get("fp_pixel_count_for_metric", 0))
+        total_fn += int(row.get("fn_pixel_count", 0))
         if row["is_defect_image"]:
             defect_dice_values.append(float(row["dice"]))
             defect_iou_values.append(float(row["iou"]))
             defect_recall_hits.append(1.0 if row["pred_has_positive"] else 0.0)
+            defect_pixel_precision_values.append(float(row["pixel_precision"]))
+            defect_pixel_recall_values.append(float(row["pixel_recall"]))
+            defect_pixel_f1_values.append(float(row["pixel_f1"]))
+            defect_component_recall_values.append(float(row["component_recall_3px"]))
+            defect_component_precision_values.append(float(row["component_precision_3px"]))
+            defect_component_f1_values.append(float(row["component_f1_3px"]))
+            defect_boundary_f1_values.append(float(row["boundary_f1_3px"]))
         else:
             normal_false_positive_hits.append(1.0 if row["pred_has_positive"] else 0.0)
             normal_fp_pixels.append(float(row["fp_pixel_count"]))
@@ -271,10 +436,24 @@ def summarize_metrics(per_image_rows):
         defect_dice = _mean_or_zero(defect_dice_values)
         defect_iou = _mean_or_zero(defect_iou_values)
         defect_image_recall = _mean_or_zero(defect_recall_hits)
+        pixel_precision_defect_macro = _mean_or_zero(defect_pixel_precision_values)
+        pixel_recall_defect_macro = _mean_or_zero(defect_pixel_recall_values)
+        pixel_f1_defect_macro = _mean_or_zero(defect_pixel_f1_values)
+        component_recall_3px = _mean_or_zero(defect_component_recall_values)
+        component_precision_3px = _mean_or_zero(defect_component_precision_values)
+        component_f1_3px = _mean_or_zero(defect_component_f1_values)
+        boundary_f1_3px = _mean_or_zero(defect_boundary_f1_values)
     else:
         defect_dice = 0.0
         defect_iou = 0.0
         defect_image_recall = 0.0
+        pixel_precision_defect_macro = 0.0
+        pixel_recall_defect_macro = 0.0
+        pixel_f1_defect_macro = 0.0
+        component_recall_3px = 0.0
+        component_precision_3px = 0.0
+        component_f1_3px = 0.0
+        boundary_f1_3px = 0.0
 
     if len(normal_false_positive_hits) > 0:
         normal_fpr = _mean_or_zero(normal_false_positive_hits)
@@ -299,6 +478,12 @@ def summarize_metrics(per_image_rows):
         normal_largest_fp_area_p95 = 0.0
         normal_largest_fp_area_max = 0.0
 
+    pixel_precision_labeled_micro, pixel_recall_labeled_micro, pixel_f1_labeled_micro = precision_recall_f1_from_counts(
+        total_tp,
+        total_fp,
+        total_fn,
+    )
+
     return {
         "defect_dice": defect_dice,
         "defect_iou": defect_iou,
@@ -313,6 +498,16 @@ def summarize_metrics(per_image_rows):
         "normal_largest_fp_area_median": normal_largest_fp_area_median,
         "normal_largest_fp_area_p95": normal_largest_fp_area_p95,
         "normal_largest_fp_area_max": normal_largest_fp_area_max,
+        "pixel_precision_defect_macro": pixel_precision_defect_macro,
+        "pixel_recall_defect_macro": pixel_recall_defect_macro,
+        "pixel_f1_defect_macro": pixel_f1_defect_macro,
+        "pixel_precision_labeled_micro": pixel_precision_labeled_micro,
+        "pixel_recall_labeled_micro": pixel_recall_labeled_micro,
+        "pixel_f1_labeled_micro": pixel_f1_labeled_micro,
+        "component_recall_3px": component_recall_3px,
+        "component_precision_3px": component_precision_3px,
+        "component_f1_3px": component_f1_3px,
+        "boundary_f1_3px": boundary_f1_3px,
         "defect_count": len(defect_dice_values),
         "normal_count": len(normal_false_positive_hits),
     }
@@ -331,7 +526,7 @@ def _is_defect_sample(sample_type, gt_mask):
     return not sample_type.startswith("normal")
 
 
-def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_area=0, image_names=None):
+def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_area=0, image_names=None, include_auprc=False):
     if image_names is None:
         image_names = [f"sample_{index:05d}" for index in range(len(prob_maps))]
 
@@ -349,15 +544,27 @@ def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_are
 
         is_defect_image = _is_defect_sample(sample_type, gt_mask)
         pred_has_positive = int(pred_mask.sum()) > 0
+        tp_pixel_count, fp_pixel_count_for_metric, fn_pixel_count = pixel_confusion(pred_mask, gt_mask)
+        pixel_precision, pixel_recall, pixel_f1 = precision_recall_f1_from_counts(
+            tp_pixel_count,
+            fp_pixel_count_for_metric,
+            fn_pixel_count,
+        )
         fp_pixel_count = int(pred_mask.sum()) if not is_defect_image else 0
         largest_fp_component_area = largest_component_area(pred_mask) if not is_defect_image else 0
 
         if is_defect_image:
             dice_value = dice_score(pred_mask, gt_mask)
             iou_value = iou_score(pred_mask, gt_mask)
+            component_recall, component_precision, component_f1 = component_metrics(pred_mask, gt_mask, tolerance_px=3)
+            boundary_f1 = boundary_f1_score(pred_mask, gt_mask, tolerance_px=3)
         else:
             dice_value = 0.0
             iou_value = 0.0
+            component_recall = 0.0
+            component_precision = 0.0
+            component_f1 = 0.0
+            boundary_f1 = 0.0
 
         per_image_rows.append(
             {
@@ -370,13 +577,26 @@ def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_are
                 "threshold": float(threshold),
                 "min_area": int(min_area),
                 "fp_pixel_count": fp_pixel_count,
+                "tp_pixel_count": tp_pixel_count,
+                "fp_pixel_count_for_metric": fp_pixel_count_for_metric,
+                "fn_pixel_count": fn_pixel_count,
+                "pred_pixel_count": int(pred_mask.sum()),
+                "target_pixel_count": int(gt_mask.sum()),
+                "pixel_precision": pixel_precision,
+                "pixel_recall": pixel_recall,
+                "pixel_f1": pixel_f1,
                 "largest_fp_component_area": largest_fp_component_area,
+                "component_recall_3px": component_recall,
+                "component_precision_3px": component_precision,
+                "component_f1_3px": component_f1,
+                "boundary_f1_3px": boundary_f1,
             }
         )
 
         pred_masks.append(pred_mask)
 
     metrics = summarize_metrics(per_image_rows)
+    metrics["pixel_auprc_all_labeled"] = average_precision_from_prob_maps(prob_maps, gt_masks) if include_auprc else 0.0
     return {
         **metrics,
         "threshold": float(threshold),
@@ -395,12 +615,14 @@ def search_postprocess_params(
     image_names=None,
     target_normal_fpr=0.10,
     lambda_fpr_penalty=2.0,
+    include_auprc=False,
 ):
     if image_names is None:
         image_names = [f"sample_{index:05d}" for index in range(len(prob_maps))]
 
     best_result = None
     search_rows = []
+    pixel_auprc_all_labeled = average_precision_from_prob_maps(prob_maps, gt_masks) if include_auprc else 0.0
 
     for threshold in threshold_values:
         for min_area in min_area_values:
@@ -411,7 +633,9 @@ def search_postprocess_params(
                 image_names=image_names,
                 threshold=threshold,
                 min_area=min_area,
+                include_auprc=False,
             )
+            result["pixel_auprc_all_labeled"] = pixel_auprc_all_labeled
             result["stage2_score"] = compute_stage2_score(
                 result,
                 target_normal_fpr=target_normal_fpr,
@@ -436,6 +660,17 @@ def search_postprocess_params(
                     "normal_largest_fp_area_median": float(result["normal_largest_fp_area_median"]),
                     "normal_largest_fp_area_p95": float(result["normal_largest_fp_area_p95"]),
                     "normal_largest_fp_area_max": float(result["normal_largest_fp_area_max"]),
+                    "pixel_precision_defect_macro": float(result["pixel_precision_defect_macro"]),
+                    "pixel_recall_defect_macro": float(result["pixel_recall_defect_macro"]),
+                    "pixel_f1_defect_macro": float(result["pixel_f1_defect_macro"]),
+                    "pixel_precision_labeled_micro": float(result["pixel_precision_labeled_micro"]),
+                    "pixel_recall_labeled_micro": float(result["pixel_recall_labeled_micro"]),
+                    "pixel_f1_labeled_micro": float(result["pixel_f1_labeled_micro"]),
+                    "pixel_auprc_all_labeled": float(result["pixel_auprc_all_labeled"]),
+                    "component_recall_3px": float(result["component_recall_3px"]),
+                    "component_precision_3px": float(result["component_precision_3px"]),
+                    "component_f1_3px": float(result["component_f1_3px"]),
+                    "boundary_f1_3px": float(result["boundary_f1_3px"]),
                     "stage2_score": float(result["stage2_score"]),
                 }
             )
