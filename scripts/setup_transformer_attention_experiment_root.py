@@ -34,6 +34,7 @@ SNAPSHOT_PATHS = [
     "src",
     "scripts",
     "configs",
+    "manifests",
     "README.md",
     "requirements.txt",
     "DATASET_DESCRIPTION.md",
