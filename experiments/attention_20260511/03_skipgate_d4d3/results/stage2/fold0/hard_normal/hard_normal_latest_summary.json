@@ -1,0 +1,9 @@
+{
+  "source_epoch": 24,
+  "pool_size": 14,
+  "count_by_device": {
+    "camera": 5,
+    "phone": 9
+  },
+  "top_score": 573000786.9111328
+}

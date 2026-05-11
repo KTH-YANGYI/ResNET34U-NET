@@ -26,7 +26,7 @@ from src.datasets import (
     resize_mask,
 )
 from src.metrics import dice_score, iou_score, largest_component_area, logits_to_probs, probs_to_binary_mask
-from src.model import build_model
+from src.model import build_model_from_config
 from src.trainer import load_checkpoint, predict_on_loader
 from src.utils import ensure_dir, load_yaml, read_json, write_csv_rows
 
@@ -237,11 +237,7 @@ def main():
         pin_memory=device.type == "cuda",
     )
 
-    model = build_model(
-        pretrained=False,
-        deep_supervision=bool(cfg.get("deep_supervision_enable", False)),
-        boundary_aux=bool(cfg.get("boundary_aux_enable", False)),
-    )
+    model = build_model_from_config(cfg)
     model.to(device)
     load_checkpoint(checkpoint_path, model, map_location=device)
 

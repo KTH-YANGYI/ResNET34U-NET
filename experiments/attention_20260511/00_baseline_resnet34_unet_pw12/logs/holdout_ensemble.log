@@ -1,0 +1,1 @@
+{'output_dir': '/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/experiments/attention_20260511/00_baseline_resnet34_unet_pw12/results/stage2/holdout_ensemble', 'holdout_count': 174, 'quantitative_count': 67, 'threshold': 0.78, 'min_area': 16, 'folds': [0, 1, 2, 3]}

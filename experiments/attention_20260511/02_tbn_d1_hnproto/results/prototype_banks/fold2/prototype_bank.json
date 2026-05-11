@@ -1,0 +1,34 @@
+{
+  "fold": 2,
+  "stage1_checkpoint": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/p0_a40_20260508/stage1/fold2/best_stage1.pt",
+  "manifest_path": "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/manifests/stage1_fold2_train_index.csv",
+  "num_pos_rows_before_limit": 953,
+  "num_neg_rows_before_limit": 242,
+  "pos_count": 128,
+  "neg_count": 128,
+  "pos_patch_type_counts_before_limit": {
+    "positive_boundary": 318,
+    "positive_center": 158,
+    "positive_context": 159,
+    "positive_shift": 318
+  },
+  "neg_patch_type_counts_before_limit": {
+    "hard_negative": 60,
+    "near_miss_negative": 61,
+    "normal_negative": 121
+  },
+  "pos_patch_type_counts": {
+    "positive_boundary": 47,
+    "positive_center": 21,
+    "positive_context": 22,
+    "positive_shift": 38
+  },
+  "neg_patch_type_counts": {
+    "hard_negative": 30,
+    "near_miss_negative": 34,
+    "normal_negative": 64
+  },
+  "feature_dim": 512,
+  "feature_layer": "center_gap",
+  "normalize": true
+}

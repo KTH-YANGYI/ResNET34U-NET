@@ -73,6 +73,7 @@ class UNetResNet34(nn.Module):
         prototype_attention_dropout=0.1,
         skip_attention_enable=False,
         skip_attention_levels=None,
+        skip_attention_gamma_init=0.0,
     ):
         super().__init__()
         self._encoder_trainable = True
@@ -135,12 +136,12 @@ class UNetResNet34(nn.Module):
         self.decoder2 = DecoderBlock(in_channels=128, skip_channels=64, out_channels=64)
         self.decoder1 = DecoderBlock(in_channels=64, skip_channels=64, out_channels=64)
         self.skip_gate_d4 = (
-            SkipAttentionGate(skip_channels=256, gate_channels=512)
+            SkipAttentionGate(skip_channels=256, gate_channels=512, gamma_init=skip_attention_gamma_init)
             if self.skip_attention_enable and "d4" in self.skip_attention_levels
             else None
         )
         self.skip_gate_d3 = (
-            SkipAttentionGate(skip_channels=128, gate_channels=256)
+            SkipAttentionGate(skip_channels=128, gate_channels=256, gamma_init=skip_attention_gamma_init)
             if self.skip_attention_enable and "d3" in self.skip_attention_levels
             else None
         )
@@ -284,6 +285,7 @@ def build_model(
     prototype_attention_dropout=0.1,
     skip_attention_enable=False,
     skip_attention_levels=None,
+    skip_attention_gamma_init=0.0,
 ):
     """
     构建模型实例。
@@ -305,6 +307,7 @@ def build_model(
             prototype_attention_dropout=prototype_attention_dropout,
             skip_attention_enable=skip_attention_enable,
             skip_attention_levels=skip_attention_levels,
+            skip_attention_gamma_init=skip_attention_gamma_init,
         )
         return model
 
@@ -325,6 +328,7 @@ def build_model(
             prototype_attention_dropout=prototype_attention_dropout,
             skip_attention_enable=skip_attention_enable,
             skip_attention_levels=skip_attention_levels,
+            skip_attention_gamma_init=skip_attention_gamma_init,
         )
         return model
 
@@ -348,8 +352,30 @@ def build_model(
             prototype_attention_dropout=prototype_attention_dropout,
             skip_attention_enable=skip_attention_enable,
             skip_attention_levels=skip_attention_levels,
+            skip_attention_gamma_init=skip_attention_gamma_init,
         )
         return model
+
+
+def collect_model_diagnostics(model):
+    diagnostics = {}
+    transformer = getattr(model, "transformer_bottleneck", None)
+    if transformer is not None and hasattr(transformer, "gamma"):
+        diagnostics["transformer_bottleneck_gamma"] = float(transformer.gamma.detach().cpu().item())
+
+    prototype_attention = getattr(model, "prototype_attention", None)
+    if prototype_attention is not None and hasattr(prototype_attention, "gamma"):
+        diagnostics["prototype_attention_gamma"] = float(prototype_attention.gamma.detach().cpu().item())
+
+    skip_gate_d4 = getattr(model, "skip_gate_d4", None)
+    if skip_gate_d4 is not None and hasattr(skip_gate_d4, "gamma"):
+        diagnostics["skip_gate_d4_gamma"] = float(skip_gate_d4.gamma.detach().cpu().item())
+
+    skip_gate_d3 = getattr(model, "skip_gate_d3", None)
+    if skip_gate_d3 is not None and hasattr(skip_gate_d3, "gamma"):
+        diagnostics["skip_gate_d3_gamma"] = float(skip_gate_d3.gamma.detach().cpu().item())
+
+    return diagnostics
 
 
 def build_model_from_config(cfg):
@@ -367,4 +393,5 @@ def build_model_from_config(cfg):
         prototype_attention_dropout=float(cfg.get("prototype_attention_dropout", cfg.get("transformer_bottleneck_dropout", 0.1))),
         skip_attention_enable=bool(cfg.get("skip_attention_enable", False)),
         skip_attention_levels=cfg.get("skip_attention_levels", ["d4", "d3"]),
+        skip_attention_gamma_init=float(cfg.get("skip_attention_gamma_init", 0.0)),
     )

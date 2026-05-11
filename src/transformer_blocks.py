@@ -38,7 +38,7 @@ class TransformerBottleneck(nn.Module):
 
 
 class SkipAttentionGate(nn.Module):
-    def __init__(self, skip_channels, gate_channels, inter_channels=None):
+    def __init__(self, skip_channels, gate_channels, inter_channels=None, gamma_init=0.0):
         super().__init__()
         if inter_channels is None:
             inter_channels = max(16, min(skip_channels, gate_channels) // 2)
@@ -50,7 +50,7 @@ class SkipAttentionGate(nn.Module):
             nn.Conv2d(inter_channels, 1, kernel_size=1),
             nn.Sigmoid(),
         )
-        self.gamma = nn.Parameter(torch.ones(1))
+        self.gamma = nn.Parameter(torch.tensor(float(gamma_init)))
 
     def forward(self, skip, gate):
         if gate.shape[-2:] != skip.shape[-2:]:

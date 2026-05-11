@@ -1,6 +1,6 @@
 # 2 Methodology
 
-This chapter describes the proposed crack-segmentation methodology used in the U-Net two-stage pipeline. The method is designed for sparse visual defects in railway contact-wire ROI images, where the positive pixels occupy only a very small part of each image and where false positives on visually normal samples must be tightly controlled. The central idea is to separate the learning problem into two complementary stages. The first stage trains a ResNet34-U-Net on informative local patches so that small crack pixels are seen frequently. The second stage transfers the learned representation to full ROI images and learns the image-level context needed to suppress false positives on normal samples. Final binary masks are produced by a single globally selected post-processing setting, chosen from pooled out-of-fold validation predictions.
+This chapter describes the proposed crack-segmentation methodology used in the U-Net two-stage pipeline. The method is designed for sparse visual defects in railway contact-wire ROI images, where the positive pixels occupy only a very small part of each image and where false positives on visually normal samples must be tightly controlled. Pixel-level crack detection is commonly formulated as a semantic segmentation problem, and recent surveys identify U-Net-like encoder-decoder networks, imbalance-aware losses, and post-processing as recurring components in crack image segmentation systems [1]. The central idea of this work is to separate the learning problem into two complementary stages. The first stage trains a ResNet34-U-Net on informative local patches so that small crack pixels are seen frequently. The second stage transfers the learned representation to full ROI images and learns the image-level context needed to suppress false positives on normal samples. The architecture combines the localization-oriented U-Net design [2] with a residual encoder backbone [3]. Final binary masks are produced by a single globally selected post-processing setting, chosen from pooled out-of-fold validation predictions.
 
 The complete pipeline is:
 
@@ -92,7 +92,7 @@ A key characteristic of the dataset is that crack pixels are sparse. Across all 
 
 ## 2.3 Annotation and Mask Generation
 
-The data entry point of the pipeline is the sample-preparation script. It scans the raw dataset, creates a manifest row for each image, and converts polygon annotations into binary masks.
+The data entry point of the pipeline is the sample-preparation script. It scans the raw dataset, creates a manifest row for each image, and converts polygon annotations into binary masks. The use of image-level polygon annotation follows the general annotation style popularized by LabelMe, where object regions are stored as polygonal shapes and then converted into supervised learning targets [4].
 
 For a crack image \(I_n\), the LabelMe file contains one or more polygons:
 
@@ -183,7 +183,7 @@ Y_n \in \{0,1\}^{1\times H\times W}.
 \tag{8}
 $$
 
-Pixel values are scaled to \([0,1]\). When ImageNet normalization is enabled, the image tensor is normalized channel-wise:
+Pixel values are scaled to \([0,1]\). When ImageNet normalization is enabled, the image tensor is normalized channel-wise using the conventional ImageNet channel statistics associated with pretrained visual backbones [5]:
 
 $$
 \tilde{X}_{n,c}
@@ -218,7 +218,7 @@ To reduce repeated disk I/O in Stage1, the patch dataset supports a worker-local
 
 ## 2.6 Network Architecture
 
-The segmentation model is a U-Net-style encoder-decoder network with a ResNet34 encoder. The encoder is based on the standard torchvision ResNet34 backbone. Stage1 attempts to initialize the encoder with ImageNet-pretrained weights. Stage2 initializes from the best Stage1 checkpoint of the same fold.
+The segmentation model is a U-Net-style encoder-decoder network with a ResNet34 encoder. U-Net provides the encoder-decoder and skip-connection structure used for dense segmentation [2], while the ResNet encoder supplies residual feature extraction that is easier to optimize at depth [3]. The encoder is based on the standard torchvision ResNet34 backbone. Stage1 attempts to initialize the encoder with ImageNet-pretrained weights. Stage2 initializes from the best Stage1 checkpoint of the same fold.
 
 The forward path is:
 
@@ -252,7 +252,7 @@ D_j
 \tag{11}
 $$
 
-where \(D_j\) is a decoder feature, \(E_j\) is an encoder skip feature, and \(\phi_j\) is a two-layer convolution block. Each convolution block contains two \(3\times3\) convolutions, each followed by Batch Normalization and ReLU.
+where \(D_j\) is a decoder feature, \(E_j\) is an encoder skip feature, and \(\phi_j\) is a two-layer convolution block. Each convolution block contains two \(3\times3\) convolutions, each followed by Batch Normalization and ReLU. Batch Normalization is used to stabilize training by normalizing intermediate activations within mini-batches [6].
 
 The final segmentation head maps the last decoder feature to one logit channel:
 
@@ -261,7 +261,7 @@ Z_n = h(D_1).
 \tag{12}
 $$
 
-The model outputs logits rather than probabilities. This is important because the binary cross-entropy component of the loss uses `BCEWithLogitsLoss`, which is numerically more stable than applying sigmoid before BCE.
+The model outputs logits rather than probabilities. This is important because the binary cross-entropy component of the loss uses `BCEWithLogitsLoss`, which combines sigmoid and BCE in a numerically stable form and supports positive-class weighting in the implementation [7].
 
 Two optional auxiliary mechanisms were implemented and tested:
 
@@ -276,7 +276,7 @@ When these auxiliary heads are enabled in Stage2, a Stage1 checkpoint without th
 
 ## 2.7 Segmentation Loss
 
-The base training objective combines weighted binary cross-entropy and Dice loss:
+The base training objective combines weighted binary cross-entropy and Dice loss. This pairing is common in highly imbalanced segmentation because BCE provides pixel-wise supervision while Dice directly measures foreground-background overlap [1,8]:
 
 $$
 \mathcal{L}_{\mathrm{seg}}
@@ -324,7 +324,7 @@ This setting increases the cost of missing sparse crack pixels while still allow
 
 ### 2.7.2 Dice Loss
 
-Dice loss directly optimizes region overlap. For one predicted probability map and one target mask, the soft Dice coefficient is:
+Dice loss directly optimizes region overlap. For one predicted probability map and one target mask, the soft Dice coefficient is based on the Dice similarity coefficient [8]:
 
 $$
 \mathrm{Dice}(P_n,Y_n)
@@ -350,7 +350,7 @@ Dice loss is useful in this task because it is less dominated by the large numbe
 
 ### 2.7.3 Normal False-Positive Loss
 
-An optional normal false-positive loss was implemented for experiments. It applies only to samples with empty masks. Let \(\mathcal{N}\) be the subset of batch samples whose target mask is all zero. For a normal sample \(i\), the model probabilities are flattened into a vector \(p_i\). The top-\(k\) probabilities are averaged:
+An optional normal false-positive loss was implemented for experiments. It applies only to samples with empty masks. The motivation is related to hard-example and imbalance-aware training: the model should not let a large number of easy background pixels obscure the few high-confidence false-positive locations that matter operationally [9,10]. Let \(\mathcal{N}\) be the subset of batch samples whose target mask is all zero. For a normal sample \(i\), the model probabilities are flattened into a vector \(p_i\). The top-\(k\) probabilities are averaged:
 
 $$
 \mathcal{L}_{\mathrm{nfp}}
@@ -378,7 +378,7 @@ This mechanism was tested with \(\lambda_{\mathrm{nfp}}\in\{0.03,0.05\}\). It di
 
 ### 2.7.4 Deep Supervision Loss
 
-When deep supervision is enabled, auxiliary segmentation logits are produced from intermediate decoder features. Each auxiliary logit map is upsampled to the input resolution and trained with the same base segmentation loss:
+When deep supervision is enabled, auxiliary segmentation logits are produced from intermediate decoder features. This follows the broader idea of deeply supervised networks, where auxiliary losses are attached to intermediate layers to make hidden representations more directly discriminative and easier to optimize [11]. Each auxiliary logit map is upsampled to the input resolution and trained with the same base segmentation loss:
 
 $$
 \mathcal{L}_{\mathrm{aux}}
@@ -414,7 +414,7 @@ The auxiliary losses do not include the normal false-positive loss. This avoids 
 
 ### 2.7.5 Boundary Auxiliary Loss
 
-The boundary auxiliary branch predicts a binary boundary map. The boundary target is generated from the ground-truth mask using dilation and erosion:
+The boundary auxiliary branch predicts a binary boundary map. Boundary-aware objectives have been proposed for highly imbalanced segmentation because thin structures and object contours can be under-emphasized by purely region-based losses [12]. The boundary target is generated from the ground-truth mask using dilation and erosion:
 
 $$
 B_n
@@ -531,7 +531,7 @@ The default target negative FPR is 0.20, and the default penalty weight is 0.5. 
 
 ## 2.9 Stage1 Hard Patch Replay
 
-Stage1 replay periodically mines patches that are difficult for the current model. The purpose is to make the model revisit false negatives and false positives rather than relying only on the static patch index.
+Stage1 replay periodically mines patches that are difficult for the current model. The purpose is to make the model revisit false negatives and false positives rather than relying only on the static patch index. This is conceptually related to online hard example mining and focal-style training, both of which address the tendency of dense vision models to be dominated by easy background or easy negative examples [9,10].
 
 After a warm-up period, the current Stage1 model evaluates the base patch index. The probability map is thresholded at 0.50 and compared with the patch target. Difficult samples are assigned replay scores.
 
@@ -679,7 +679,7 @@ validation images
   -> checkpoint comparison
 ```
 
-The main segmentation metrics are Dice and IoU. For a binary prediction \(\hat{Y}\) and target \(Y\):
+The main segmentation metrics are Dice and IoU. Dice measures set overlap through the Dice similarity coefficient [8], while IoU corresponds to the Jaccard index [13]. For a binary prediction \(\hat{Y}\) and target \(Y\):
 
 $$
 \mathrm{Dice}(\hat{Y},Y)
@@ -784,7 +784,7 @@ P_n(x,y)\geq\tau
 \tag{42}
 $$
 
-Connected components are computed with 8-neighborhood connectivity. Let \(\mathcal{C}(B_{\tau,n})\) be the connected components of the raw mask. The final mask is:
+Connected components are computed with 8-neighborhood connectivity, a standard binary image analysis operation used to group adjacent foreground pixels into components [14]. Let \(\mathcal{C}(B_{\tau,n})\) be the connected components of the raw mask. The final mask is:
 
 $$
 \hat{Y}_{\tau,a,n}
@@ -997,3 +997,33 @@ Stage2 initializes from the best Stage1 checkpoint of the same fold and fine-tun
 The model is trained with a BCE-Dice loss. Positive pixels are weighted in BCE to counter the extreme sparsity of crack masks. Validation computes defect Dice, defect IoU, defect-image recall, and normal-image false-positive rate. Stage2 checkpoint selection uses a fixed train-time threshold and min-area filter, so that model selection is separated from final post-processing tuning.
 
 After all folds are trained, out-of-fold validation predictions are pooled. A single global threshold and connected-component minimum-area setting is selected on this pooled set. This produces a unified post-processing configuration for reporting and inference, and avoids using a different locally optimized threshold for each fold.
+
+## References
+
+[1] H. Li, W. Wang, M. Wang, L. Li, and V. Vimlund, "A review of deep learning methods for pixel-level crack detection," *Journal of Traffic and Transportation Engineering (English Edition)*, vol. 9, no. 6, pp. 945-968, 2022. doi: [10.1016/j.jtte.2022.11.003](https://doi.org/10.1016/j.jtte.2022.11.003).
+
+[2] O. Ronneberger, P. Fischer, and T. Brox, "U-Net: Convolutional networks for biomedical image segmentation," in *Medical Image Computing and Computer-Assisted Intervention (MICCAI)*, LNCS 9351, pp. 234-241, 2015. doi: [10.1007/978-3-319-24574-4_28](https://doi.org/10.1007/978-3-319-24574-4_28).
+
+[3] K. He, X. Zhang, S. Ren, and J. Sun, "Deep residual learning for image recognition," in *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 770-778, 2016. doi: [10.1109/CVPR.2016.90](https://doi.org/10.1109/CVPR.2016.90).
+
+[4] B. C. Russell, A. Torralba, K. P. Murphy, and W. T. Freeman, "LabelMe: A database and web-based tool for image annotation," *International Journal of Computer Vision*, vol. 77, pp. 157-173, 2008. doi: [10.1007/s11263-007-0090-8](https://doi.org/10.1007/s11263-007-0090-8).
+
+[5] O. Russakovsky, J. Deng, H. Su, et al., "ImageNet Large Scale Visual Recognition Challenge," *International Journal of Computer Vision*, vol. 115, pp. 211-252, 2015. doi: [10.1007/s11263-015-0816-y](https://doi.org/10.1007/s11263-015-0816-y).
+
+[6] S. Ioffe and C. Szegedy, "Batch normalization: Accelerating deep network training by reducing internal covariate shift," in *Proceedings of the 32nd International Conference on Machine Learning (ICML)*, PMLR 37, pp. 448-456, 2015. Available: [https://proceedings.mlr.press/v37/ioffe15](https://proceedings.mlr.press/v37/ioffe15).
+
+[7] PyTorch Contributors, "`torch.nn.BCEWithLogitsLoss`," *PyTorch Documentation*. Available: [https://docs.pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html](https://docs.pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html).
+
+[8] L. R. Dice, "Measures of the amount of ecologic association between species," *Ecology*, vol. 26, no. 3, pp. 297-302, 1945. doi: [10.2307/1932409](https://doi.org/10.2307/1932409).
+
+[9] A. Shrivastava, A. Gupta, and R. Girshick, "Training region-based object detectors with online hard example mining," in *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, pp. 761-769, 2016. doi: [10.1109/CVPR.2016.89](https://doi.org/10.1109/CVPR.2016.89).
+
+[10] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Dollar, "Focal loss for dense object detection," in *Proceedings of the IEEE International Conference on Computer Vision (ICCV)*, pp. 2980-2988, 2017. doi: [10.1109/ICCV.2017.324](https://doi.org/10.1109/ICCV.2017.324).
+
+[11] C.-Y. Lee, S. Xie, P. Gallagher, Z. Zhang, and Z. Tu, "Deeply-supervised nets," in *Proceedings of the Eighteenth International Conference on Artificial Intelligence and Statistics (AISTATS)*, PMLR 38, pp. 562-570, 2015. Available: [https://proceedings.mlr.press/v38/lee15a.html](https://proceedings.mlr.press/v38/lee15a.html).
+
+[12] H. Kervadec, J. Bouchtiba, C. Desrosiers, E. Granger, J. Dolz, and I. Ben Ayed, "Boundary loss for highly unbalanced segmentation," in *Proceedings of the 2nd International Conference on Medical Imaging with Deep Learning (MIDL)*, PMLR 102, pp. 285-296, 2019. Available: [https://proceedings.mlr.press/v102/kervadec19a.html](https://proceedings.mlr.press/v102/kervadec19a.html).
+
+[13] P. Jaccard, "Etude comparative de la distribution florale dans une portion des Alpes et du Jura," *Bulletin de la Societe Vaudoise des Sciences Naturelles*, vol. 37, no. 142, pp. 547-579, 1901. doi: [10.5169/seals-266450](https://doi.org/10.5169/seals-266450).
+
+[14] R. Szeliski, *Computer Vision: Algorithms and Applications*, 2nd ed. Springer, 2022. Available: [https://szeliski.org/Book/](https://szeliski.org/Book/).

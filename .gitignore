@@ -24,3 +24,30 @@ scripts/export_model_arch_diagram.py
 scripts/export_model_arch_ppt_2d.py
 scripts/export_model_arch_ppt_single.py
 scripts/plot_training_reports.py
+
+# Structured experiment folders keep configs/scripts in git but leave bulky run
+# artifacts local unless they are lightweight logs/metrics/summaries.
+experiments/**/logs/*
+!experiments/**/logs/.gitkeep
+!experiments/**/logs/**/
+!experiments/**/logs/**/*.log
+!experiments/**/logs/**/*.out
+!experiments/**/logs/**/*.err
+experiments/**/results/*
+!experiments/**/results/
+!experiments/**/results/.gitkeep
+!experiments/**/results/**/
+!experiments/**/results/**/*.csv
+!experiments/**/results/**/*.json
+!experiments/**/results/**/*.md
+!experiments/**/results/**/*.txt
+!experiments/**/results/significance/
+!experiments/**/results/significance/.gitkeep
+!experiments/**/comparison/results/FAIRNESS_CHECK.md
+!experiments/**/comparison/results/fairness_check.json
+
+# Keep model weights and visual prediction dumps out of Git.
+experiments/**/*.pt
+experiments/**/prob_maps/**
+experiments/**/pred_masks/**
+experiments/**/predictions/**

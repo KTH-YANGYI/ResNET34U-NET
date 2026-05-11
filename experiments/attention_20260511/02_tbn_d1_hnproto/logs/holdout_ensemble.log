@@ -1,0 +1,3 @@
+/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/transformer.py:282: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  warnings.warn(f"enable_nested_tensor is True, but self.use_nested_tensor is False because {why_not_sparsity_fast_path}")
+{'output_dir': '/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/experiments/attention_20260511/02_tbn_d1_hnproto/results/stage2/holdout_ensemble', 'holdout_count': 174, 'quantitative_count': 67, 'threshold': 0.8, 'min_area': 32, 'folds': [0, 1, 2, 3]}

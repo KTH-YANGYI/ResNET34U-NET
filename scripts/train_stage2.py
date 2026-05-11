@@ -23,7 +23,7 @@ from src.mining import (
     sample_rows_with_frame_gap,
     save_stage2_hard_normal_outputs,
 )
-from src.model import build_model_from_config
+from src.model import build_model_from_config, collect_model_diagnostics
 from src.samples import load_samples, split_samples_for_fold
 from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, load_compatible_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
@@ -613,6 +613,7 @@ def main():
                 "best_stage2_result": best_stage2_result,
                 "hard_normal_summary": hard_normal_summary,
                 "current_val_stats": summarize_stage2_result(val_stats),
+                "model_diagnostics": collect_model_diagnostics(model),
             }
 
             if scaler is not None:

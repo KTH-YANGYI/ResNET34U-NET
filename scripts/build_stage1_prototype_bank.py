@@ -1,5 +1,6 @@
 import argparse
 import sys
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -90,6 +91,14 @@ def limit_rows(rows, max_count, seed):
     return [rows[index] for index in indices]
 
 
+def count_patch_types(rows):
+    counter = Counter()
+    for row in rows:
+        patch_type = str(row.get("patch_type", "")).strip() or "unknown"
+        counter[patch_type] += 1
+    return dict(sorted(counter.items(), key=lambda item: item[0]))
+
+
 def extract_features(model, rows, cfg, device):
     out_size = int(cfg.get("stage1_out_size", cfg.get("patch_out_size", 224)))
     batch_size = int(cfg.get("prototype_batch_size", cfg.get("batch_size", 64)))
@@ -141,13 +150,15 @@ def main():
 
     manifest_path = resolve_path(f"manifests/stage1_fold{int(args.fold)}_train_index.csv")
     rows = read_csv_rows(manifest_path)
+    all_pos_rows = [row for row in rows if is_positive_patch(row)]
+    all_neg_rows = [row for row in rows if is_negative_patch(row)]
     pos_rows = limit_rows(
-        [row for row in rows if is_positive_patch(row)],
+        all_pos_rows,
         int(cfg.get("prototype_pos_max", 128)),
         seed,
     )
     neg_rows = limit_rows(
-        [row for row in rows if is_negative_patch(row)],
+        all_neg_rows,
         int(cfg.get("prototype_neg_max", 128)),
         seed + 1009,
     )
@@ -175,8 +186,15 @@ def main():
             "fold": int(args.fold),
             "stage1_checkpoint": str(resolve_path(cfg["stage1_checkpoint"])),
             "manifest_path": str(manifest_path),
+            "num_pos_rows_before_limit": len(all_pos_rows),
+            "num_neg_rows_before_limit": len(all_neg_rows),
             "pos_count": len(pos_rows),
             "neg_count": len(neg_rows),
+            "pos_patch_type_counts_before_limit": count_patch_types(all_pos_rows),
+            "neg_patch_type_counts_before_limit": count_patch_types(all_neg_rows),
+            "pos_patch_type_counts": count_patch_types(pos_rows),
+            "neg_patch_type_counts": count_patch_types(neg_rows),
+            "feature_dim": int(pos_prototypes.shape[1]) if pos_prototypes.ndim == 2 else 0,
             "feature_layer": "center_gap",
             "normalize": bool(cfg.get("prototype_l2_normalize", True)),
         },
