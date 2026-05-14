@@ -16,13 +16,13 @@ from src.datasets import ROIDataset, build_stage2_eval_transform
 from src.metrics import logits_to_probs, search_postprocess_params
 from src.model import build_model_from_config
 from src.trainer import load_checkpoint, predict_on_loader
-from src.utils import ensure_dir, load_yaml, save_json, write_csv_rows
+from src.utils import ensure_dir, load_stage_config, save_json, write_csv_rows
 from scripts.evaluate_val import build_min_area_grid, build_threshold_grid, load_val_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Search one global postprocess setting over pooled OOF validation predictions")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to stage2 config file")
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to stage2 config file")
     parser.add_argument("--folds", type=str, default="0,1,2,3", help="Comma-separated fold ids")
     return parser.parse_args()
 
@@ -156,7 +156,7 @@ def build_output_paths(cfg):
 def main():
     args = parse_args()
 
-    cfg = load_yaml(resolve_path(args.config))
+    cfg = load_stage_config(resolve_path(args.config), "stage2")
     folds = parse_folds(args.folds)
     device = build_device(cfg)
 

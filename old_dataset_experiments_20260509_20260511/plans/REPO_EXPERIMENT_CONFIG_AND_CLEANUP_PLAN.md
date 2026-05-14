@@ -1,5 +1,10 @@
 # ResNET34U-NET：正式实验配置与工程整理建议
 
+> Superseded note: this was the 2026-05-11 cleanup plan. The current repository
+> has been collapsed to one active config, `configs/canonical_baseline.yaml`.
+> Historical four-experiment outputs are frozen under
+> `old_dataset_experiments_20260509_20260511/`.
+
 生成日期：2026-05-11  
 适用仓库：`KTH-YANGYI/ResNET34U-NET` 当前 `main` 分支  
 目标：确定 baseline 与 3 个创新实验的正式配置，并给出代码/目录整理方案，方便 Codex 执行。

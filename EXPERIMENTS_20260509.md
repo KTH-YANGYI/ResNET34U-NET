@@ -1,5 +1,9 @@
 # Experiment Summary - 2026-05-09
 
+> Archive note: this file summarizes historical old-dataset runs. Current active
+> training uses `configs/canonical_baseline.yaml`; the old configs/scripts
+> referenced below are frozen under `old_dataset_experiments_20260509_20260511/`.
+
 This document summarizes the U-Net and YOLO experiments run on Alvis on 2026-05-09, where the logs were kept, what each experiment was intended to test, the observed results, and which parts are suitable for the thesis.
 
 The lightweight logs and review artifacts copied into this repository are under:
@@ -239,4 +243,3 @@ The best current YOLO detector baseline is:
 
 - `yolo11n_crack_broken_e140_2gpu_baseline_20260509`
 - True best mAP50-95 `0.60735`, recall at that epoch `0.84212`
-

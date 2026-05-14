@@ -1,0 +1,64 @@
+seed: 42
+
+fold: 0
+
+image_size: 640
+samples_path: manifests/samples.csv
+batch_size: 48
+epochs: 50
+
+encoder_lr: 2.0e-5
+decoder_lr: 1.0e-4
+weight_decay: 1.0e-4
+
+bce_weight: 0.5
+dice_weight: 0.5
+pos_weight: 12.0
+normal_fp_loss_weight: 0.0
+normal_fp_topk_ratio: 0.10
+
+amp: true
+early_stop_patience: 16
+early_stop_min_delta: 0.0
+
+lr_factor: 0.5
+lr_patience: 4
+min_lr: 1.0e-7
+
+num_workers: 8
+pretrained: false
+device: cuda
+auto_evaluate_after_train: true
+
+threshold: 0.50
+train_eval_threshold: 0.50
+train_eval_min_area: 0
+
+use_imagenet_normalize: true
+augment_enable: true
+augment_hflip_p: 0.5
+augment_vflip_p: 0.5
+augment_rotate_deg: 10
+augment_brightness: 0.10
+augment_contrast: 0.10
+augment_gamma: 0.0
+augment_noise_std: 0.015
+augment_blur_p: 0.0
+
+target_normal_fpr: 0.10
+lambda_fpr_penalty: 2.0
+threshold_grid_start: 0.10
+threshold_grid_end: 0.95
+threshold_grid_step: 0.02
+min_area_grid: [0, 8, 16, 24, 32, 48]
+random_normal_k_factor: 1.0
+use_hard_normal_replay: true
+stage2_hard_normal_ratio: 0.40
+hard_normal_max_repeats_per_epoch: 2
+hard_normal_warmup_epochs: 2
+hard_normal_refresh_every: 2
+hard_normal_pool_factor: 3.0
+
+stage1_checkpoint_template: outputs/experiments/p0_a40_20260508/stage1/fold{fold}/best_stage1.pt
+save_dir_template: outputs/experiments/p0_a40_e50_bs48_pw12_20260509/stage2/fold{fold}
+global_postprocess_path: outputs/experiments/p0_a40_e50_bs48_pw12_20260509/stage2/oof_global_postprocess.json

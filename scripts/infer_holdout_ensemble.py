@@ -19,12 +19,12 @@ from src.metrics import evaluate_prob_maps, logits_to_probs, probs_to_binary_mas
 from src.model import build_model_from_config
 from src.samples import holdout_samples, load_samples
 from src.trainer import load_checkpoint, predict_on_loader
-from src.utils import ensure_dir, load_yaml, read_json, save_json, write_csv_rows
+from src.utils import ensure_dir, load_stage_config, read_json, save_json, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run frozen OOF-postprocessed holdout inference with a fold ensemble")
-    parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml")
     parser.add_argument("--folds", type=str, default="0,1,2,3")
     parser.add_argument("--output-dir", type=str, default="")
     return parser.parse_args()
@@ -133,7 +133,7 @@ def predict_fold(cfg, fold, rows, device):
 
 def main():
     args = parse_args()
-    cfg = load_yaml(resolve_path(args.config))
+    cfg = load_stage_config(resolve_path(args.config), "stage2")
     folds = parse_folds(args.folds)
     rows = load_holdout_rows(cfg)
     output_dir = resolve_path(args.output_dir) if args.output_dir else resolve_path(cfg["global_postprocess_path"]).parent / "holdout_ensemble"

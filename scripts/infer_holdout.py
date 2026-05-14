@@ -19,12 +19,12 @@ from src.metrics import logits_to_probs, probs_to_binary_mask
 from src.model import build_model_from_config
 from src.samples import holdout_samples, load_samples
 from src.trainer import load_checkpoint, predict_on_loader
-from src.utils import ensure_dir, load_yaml, read_csv_rows, read_json, write_csv_rows
+from src.utils import ensure_dir, load_stage_config, read_csv_rows, read_json, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Infer holdout images with best stage2 model")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to config file")
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to config file")
     parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
@@ -113,7 +113,7 @@ def load_postprocess_params(cfg, save_dir):
 def main():
     args = parse_args()
 
-    cfg = load_yaml(resolve_path(args.config))
+    cfg = load_stage_config(resolve_path(args.config), "stage2")
     fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
     cfg = apply_fold_overrides(cfg, fold)
 

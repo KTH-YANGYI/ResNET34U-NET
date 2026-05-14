@@ -19,12 +19,12 @@ from src.losses import BCEDiceLoss
 from src.mining import build_stage1_replay_rows, save_stage1_replay_outputs
 from src.model import build_model
 from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, save_checkpoint, train_one_epoch, validate_stage1
-from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
+from src.utils import ensure_dir, load_stage_config, read_csv_rows, save_json, seed_worker, set_seed, write_csv_rows
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train stage1 patch model")
-    parser.add_argument("--config", type=str, default="configs/stage1.yaml", help="Path to config file")
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to config file")
     parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
@@ -278,7 +278,7 @@ def should_refresh_stage1_replay(epoch, cfg):
 def main():
     args = parse_args()
 
-    cfg = load_yaml(resolve_path(args.config))
+    cfg = load_stage_config(resolve_path(args.config), "stage1")
     fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
     cfg = apply_fold_overrides(cfg, fold)
 
@@ -290,7 +290,10 @@ def main():
     train_patch_count = len(base_train_rows)
     val_patch_count = len(val_rows)
 
-    model = build_model(pretrained=bool(cfg.get("pretrained", True)))
+    model = build_model(
+        pretrained=bool(cfg.get("pretrained", True)),
+        allow_pretrained_fallback=bool(cfg.get("allow_pretrained_fallback", True)),
+    )
     model.to(device)
 
     criterion = BCEDiceLoss(
@@ -315,6 +318,7 @@ def main():
 
     save_dir = resolve_path(cfg["save_dir"])
     ensure_dir(save_dir)
+    save_json(save_dir / "resolved_config.json", cfg)
 
     best_ckpt_path = save_dir / "best_stage1.pt"
     last_ckpt_path = save_dir / "last_stage1.pt"

@@ -3,26 +3,41 @@ set -euo pipefail
 
 config="${1:?usage: run_stage2_variant_4gpu.sh CONFIG EXPERIMENT_DIR}"
 experiment_dir="${2:?usage: run_stage2_variant_4gpu.sh CONFIG EXPERIMENT_DIR}"
-folds=(${FOLDS:-0 1 2 3})
+fold_text="${FOLDS:-0,1,2,3}"
+fold_text="${fold_text//,/ }"
+folds=(${fold_text})
+gpu_text="${CUDA_FOLD_GPUS:-0,1,2,3}"
+gpu_text="${gpu_text//,/ }"
+gpus=(${gpu_text})
 build_prototypes="${BUILD_PROTOTYPES:-0}"
 
 mkdir -p "${experiment_dir}/logs"
 
 run_parallel_folds() {
   local phase="$1"
-  local command_template="$2"
   local log_suffix="$3"
   local status=0
   local pids=()
+  local idx=0
+
+  if [ "${#gpus[@]}" -lt "${#folds[@]}" ]; then
+    echo "Need at least one GPU id per concurrent fold in CUDA_FOLD_GPUS; got ${#gpus[@]} for ${#folds[@]} folds." >&2
+    exit 2
+  fi
 
   for fold in "${folds[@]}"; do
-    local gpu="${fold}"
+    local gpu="${gpus[$idx]}"
+    idx=$((idx + 1))
     (
       set -euo pipefail
       export CUDA_VISIBLE_DEVICES="${gpu}"
       export PYTHONUNBUFFERED=1
       echo "${phase} fold=${fold} gpu=${gpu} started $(date -Is)"
-      eval "${command_template}"
+      if [ "${phase}" = "prototype_bank" ]; then
+        python scripts/build_stage1_prototype_bank.py --config "${config}" --fold "${fold}"
+      else
+        python scripts/train_stage2.py --config "${config}" --fold "${fold}"
+      fi
       echo "${phase} fold=${fold} gpu=${gpu} finished $(date -Is)"
     ) > "${experiment_dir}/logs/fold${fold}_${log_suffix}.log" 2>&1 &
     local pid="$!"
@@ -55,13 +70,11 @@ run_parallel_folds() {
 if [ "${build_prototypes}" = "1" ]; then
   run_parallel_folds \
     "prototype_bank" \
-    "python scripts/build_stage1_prototype_bank.py --config \"${config}\" --fold \"\${fold}\"" \
     "prototype"
 fi
 
 run_parallel_folds \
   "stage2_train" \
-  "python scripts/train_stage2.py --config \"${config}\" --fold \"\${fold}\"" \
   "stage2"
 
 python scripts/search_oof_postprocess.py --config "${config}" --folds "$(IFS=,; echo "${folds[*]}")" \
@@ -77,6 +90,5 @@ python scripts/infer_holdout_ensemble.py --config "${config}" --folds "$(IFS=,; 
   echo "- Experiment dir: ${experiment_dir}"
   echo "- Folds: ${folds[*]}"
   echo "- Finished: $(date -Is)"
-  echo "- OOF: ${experiment_dir}/results/stage2/oof_global_postprocess.json"
-  echo "- Holdout: ${experiment_dir}/results/stage2/holdout_ensemble/holdout_metrics.json"
+  echo "- OOF and holdout outputs follow the config paths."
 } > "${experiment_dir}/RUNNING_STATUS.md"

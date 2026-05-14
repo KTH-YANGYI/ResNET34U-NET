@@ -1,5 +1,9 @@
 # U-Net Two-Stage Data Flow and Mechanism Summary
 
+> Current entry note: active training now uses only `configs/canonical_baseline.yaml`.
+> Older config and runner names mentioned in this document are historical and
+> are kept only for method/experiment traceability.
+
 本文档按数据流顺序完整说明 `UNET_two_stage` 项目的数据、模型、训练、验证、后处理、推理和实验机制。写作目标是给论文方法章节、实验章节和消融实验章节提供可直接改写的中英双语材料。
 
 This document describes the complete data flow and mechanism design of the `UNET_two_stage` project, including data preparation, model architecture, training, validation, post-processing, inference, and experiments. It is written as bilingual material that can be adapted for the method and experiment sections of a thesis.

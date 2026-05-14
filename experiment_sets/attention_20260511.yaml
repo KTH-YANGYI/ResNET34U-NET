@@ -1,0 +1,73 @@
+name: attention_20260511
+status: frozen
+canonical_baseline_config: configs/canonical_baseline.yaml
+archive_root: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511
+description: >
+  Frozen four-run Stage2 architecture comparison. The active project keeps only
+  configs/canonical_baseline.yaml as the live baseline; this file records the
+  historical experiment set and the model variants used by each run.
+
+fairness_policy:
+  fixed_samples_path: manifests/samples.csv
+  fixed_folds: [0, 1, 2, 3]
+  fixed_image_size: 640
+  fixed_batch_size: 48
+  fixed_epochs: 50
+  fixed_pos_weight: 12.0
+  fixed_stage1_checkpoint_template: outputs/experiments/p0_a40_20260508/stage1/fold{fold}/best_stage1.pt
+  only_architecture_may_change: true
+
+experiments:
+  - id: "00"
+    name: baseline_resnet34_unet_pw12
+    model_variant: resnet34_unet_baseline
+    archived_config: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/00_baseline_resnet34_unet_pw12/config.yaml
+    archived_result_dir_template: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/00_baseline_resnet34_unet_pw12/results/stage2/fold{fold}
+    stage2_overrides:
+      model_name: resnet34_unet_pw12
+      model_variant: resnet34_unet_baseline
+
+  - id: "01"
+    name: tbn_d1
+    model_variant: tbn_d1
+    archived_config: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/01_tbn_d1/config.yaml
+    archived_result_dir_template: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/01_tbn_d1/results/stage2/fold{fold}
+    stage2_overrides:
+      model_name: resnet34_unet_tbn_d1
+      model_variant: tbn_d1
+      transformer_bottleneck_layers: 1
+      transformer_bottleneck_heads: 8
+      transformer_bottleneck_dropout: 0.1
+      stage1_load_strict: false
+
+  - id: "02"
+    name: tbn_d1_hnproto
+    model_variant: tbn_d1_hnproto
+    archived_config: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/02_tbn_d1_hnproto/config.yaml
+    archived_result_dir_template: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/02_tbn_d1_hnproto/results/stage2/fold{fold}
+    stage2_overrides:
+      model_name: resnet34_unet_tbn_d1_hnproto
+      model_variant: tbn_d1_hnproto
+      transformer_bottleneck_layers: 1
+      transformer_bottleneck_heads: 8
+      transformer_bottleneck_dropout: 0.1
+      prototype_attention_heads: 8
+      prototype_attention_dropout: 0.1
+      prototype_pos_max: 128
+      prototype_neg_max: 128
+      prototype_l2_normalize: true
+      prototype_batch_size: 64
+      prototype_bank_path_template: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/02_tbn_d1_hnproto/results/prototype_banks/fold{fold}/prototype_bank.pt
+      stage1_load_strict: false
+
+  - id: "03"
+    name: skipgate_d4d3
+    model_variant: skipgate_d4d3
+    archived_config: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/03_skipgate_d4d3/config.yaml
+    archived_result_dir_template: old_dataset_experiments_20260509_20260511/transformer_attention/attention_20260511/03_skipgate_d4d3/results/stage2/fold{fold}
+    stage2_overrides:
+      model_name: resnet34_unet_skipgate_d4d3
+      model_variant: skipgate_d4d3
+      skip_attention_levels: ["d4", "d3"]
+      skip_attention_gamma_init: 0.0
+      stage1_load_strict: false

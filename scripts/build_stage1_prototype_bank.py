@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.datasets import PatchDataset, build_stage1_eval_transform
 from src.model import build_model
 from src.trainer import load_checkpoint
-from src.utils import ensure_dir, load_yaml, read_csv_rows, save_json
+from src.utils import ensure_dir, load_stage_config, read_csv_rows, save_json
 
 
 POSITIVE_PATCH_TYPES = {
@@ -59,6 +59,14 @@ def apply_fold_overrides(cfg, fold):
     ]:
         if template_key in cfg:
             cfg[target_key] = str(cfg[template_key]).format(fold=fold)
+    return cfg
+
+
+def apply_stage1_fold_overrides(cfg, fold):
+    cfg = dict(cfg)
+    cfg["fold"] = int(fold)
+    if "train_index_path_template" in cfg:
+        cfg["train_index_path"] = str(cfg["train_index_path_template"]).format(fold=fold)
     return cfg
 
 
@@ -145,10 +153,13 @@ def extract_features(model, rows, cfg, device):
 
 def main():
     args = parse_args()
-    cfg = apply_fold_overrides(load_yaml(resolve_path(args.config)), args.fold)
+    cfg = apply_fold_overrides(load_stage_config(resolve_path(args.config), "stage2"), args.fold)
+    stage1_cfg = apply_stage1_fold_overrides(load_stage_config(resolve_path(args.config), "stage1"), args.fold)
     seed = int(cfg.get("seed", 42)) + int(args.fold)
 
-    manifest_path = resolve_path(f"manifests/stage1_fold{int(args.fold)}_train_index.csv")
+    manifest_path = resolve_path(
+        stage1_cfg.get("train_index_path", f"manifests/stage1_fold{int(args.fold)}_train_index.csv")
+    )
     rows = read_csv_rows(manifest_path)
     all_pos_rows = [row for row in rows if is_positive_patch(row)]
     all_neg_rows = [row for row in rows if is_negative_patch(row)]

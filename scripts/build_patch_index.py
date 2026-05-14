@@ -3,7 +3,6 @@ import csv
 import json
 import random
 import sys
-import ast
 from collections import Counter
 from pathlib import Path
 
@@ -18,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from src.samples import load_samples, split_samples_for_fold
+from src.utils import load_stage_config
 
 
 MANIFEST_DIR = PROJECT_ROOT / "manifests"
@@ -48,45 +48,6 @@ def save_json(path, obj):
         json.dump(obj, handle, ensure_ascii=False, indent=2)
 
 
-def load_yaml(path):
-    data = {}
-    with open(path, "r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if text == "" or text.startswith("#") or ":" not in text:
-                continue
-
-            key, raw_value = text.split(":", 1)
-            key = key.strip()
-            value = raw_value.strip()
-
-            if value == "":
-                data[key] = ""
-                continue
-
-            lower_value = value.lower()
-            if lower_value in {"true", "false"}:
-                data[key] = lower_value == "true"
-                continue
-
-            try:
-                data[key] = ast.literal_eval(value)
-                continue
-            except Exception:
-                pass
-
-            try:
-                if any(char in value for char in [".", "e", "E"]):
-                    data[key] = float(value)
-                else:
-                    data[key] = int(value)
-                continue
-            except Exception:
-                data[key] = value.strip("\"'")
-
-    return data
-
-
 def read_mask_binary(path):
     mask = Image.open(Path(path)).convert("L")
     return (np.array(mask) > 0).astype(np.uint8)
@@ -94,7 +55,7 @@ def read_mask_binary(path):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Build stage1 patch indexes")
-    parser.add_argument("--config", type=str, default="configs/stage1.yaml", help="Path to stage1 config")
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to stage1 config")
     return parser.parse_args()
 
 
@@ -103,6 +64,10 @@ def resolve_path(path_text):
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path
+
+
+def resolve_fold_template(template_text, fold):
+    return resolve_path(str(template_text).format(fold=int(fold)))
 
 
 def normalize_int_list(value, default_values):
@@ -116,9 +81,10 @@ def normalize_int_list(value, default_values):
 
 
 def load_patch_cfg(config_path):
-    cfg = load_yaml(resolve_path(config_path))
+    cfg = load_stage_config(resolve_path(config_path), "stage1")
 
     return {
+        "seed": int(cfg.get("seed", 42)),
         "n_folds": int(cfg.get("n_folds", 4)),
         "samples_path": str(cfg.get("samples_path", "")).strip(),
         "patch_out_size": int(cfg.get("patch_out_size", 384)),
@@ -140,6 +106,11 @@ def load_patch_cfg(config_path):
         "max_components_per_image": int(cfg.get("max_components_per_image", 3)),
         "max_positive_patches_per_image": int(cfg.get("max_positive_patches_per_image", 6)),
         "max_attempts_per_patch": int(cfg.get("max_attempts_per_patch", 20)),
+        "train_index_path_template": str(cfg.get("train_index_path_template", "manifests/stage1_fold{fold}_train_index.csv")),
+        "val_index_path_template": str(cfg.get("val_index_path_template", "manifests/stage1_fold{fold}_val_index.csv")),
+        "patch_summary_path": str(cfg.get("patch_summary_path", "manifests/stage1_patch_summary.json")),
+        "patch_train_seed_offset": int(cfg.get("patch_train_seed_offset", 1000)),
+        "patch_val_seed_offset": int(cfg.get("patch_val_seed_offset", 2000)),
     }
 
 
@@ -1002,8 +973,16 @@ def main():
             normal_train_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_train.csv")
             normal_val_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_val.csv")
 
-        train_seed = 1000 + fold_index
-        val_seed = 2000 + fold_index
+        train_seed = (
+            int(patch_cfg["seed"])
+            + int(patch_cfg["patch_train_seed_offset"])
+            + fold_index
+        )
+        val_seed = (
+            int(patch_cfg["seed"])
+            + int(patch_cfg["patch_val_seed_offset"])
+            + fold_index
+        )
 
         train_patch_rows, train_summary = build_patch_index_for_split(
             defect_rows=defect_train_rows,
@@ -1018,8 +997,8 @@ def main():
             patch_cfg=patch_cfg,
         )
 
-        train_index_path = MANIFEST_DIR / f"stage1_fold{fold_index}_train_index.csv"
-        val_index_path = MANIFEST_DIR / f"stage1_fold{fold_index}_val_index.csv"
+        train_index_path = resolve_fold_template(patch_cfg["train_index_path_template"], fold_index)
+        val_index_path = resolve_fold_template(patch_cfg["val_index_path_template"], fold_index)
 
         write_patch_index_csv(train_index_path, train_patch_rows)
         write_patch_index_csv(val_index_path, val_patch_rows)
@@ -1032,6 +1011,8 @@ def main():
             "normal_val_image_count": len(normal_val_rows),
             "train_seed": train_seed,
             "val_seed": val_seed,
+            "train_index_path": str(train_index_path),
+            "val_index_path": str(val_index_path),
             "train_patch_summary": train_summary,
             "val_patch_summary": val_summary,
         }
@@ -1051,8 +1032,9 @@ def main():
             f"normal_neg={val_summary['normal_negative_count']})"
         )
 
-    save_json(MANIFEST_DIR / "stage1_patch_summary.json", summary)
-    print("build_patch_index finished, stage1 patch indexes were written to manifests/.")
+    summary_path = resolve_path(patch_cfg["patch_summary_path"])
+    save_json(summary_path, summary)
+    print(f"build_patch_index finished, summary was written to {summary_path}.")
 
 
 if __name__ == "__main__":

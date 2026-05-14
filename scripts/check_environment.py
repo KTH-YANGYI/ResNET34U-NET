@@ -10,10 +10,10 @@ REQUIRED_MODULES = [
     ("torchvision", "torchvision"),
     ("numpy", "NumPy"),
     ("PIL", "Pillow"),
+    ("yaml", "PyYAML"),
 ]
 
 OPTIONAL_MODULES = [
-    ("yaml", "PyYAML, optional because configs have a built-in fallback parser"),
     ("tqdm", "tqdm, optional progress bars"),
     ("scipy", "SciPy, faster connected components"),
 ]

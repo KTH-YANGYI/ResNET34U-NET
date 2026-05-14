@@ -4,8 +4,8 @@ set -euo pipefail
 PYTHON_BIN="${PYTHON:-python}"
 FOLDS="0,1,2,3"
 GPUS="${CUDA_FOLD_GPUS:-}"
-STAGE1_CONFIG="configs/stage1.yaml"
-STAGE2_CONFIG="configs/stage2.yaml"
+STAGE1_CONFIG="configs/canonical_baseline.yaml"
+STAGE2_CONFIG="configs/canonical_baseline.yaml"
 LOG_DIR="outputs/logs"
 RUN_PREPARE=1
 RUN_STAGE1=1
@@ -24,6 +24,10 @@ Options:
                         If omitted, the script tries to detect GPUs with nvidia-smi.
   --folds LIST          Fold ids to run. Default: 0,1,2,3.
   --skip-prepare        Skip prepare_samples.py and build_patch_index.py.
+  --config PATH         Use one canonical config for both Stage1 and Stage2.
+                        Default: configs/canonical_baseline.yaml.
+  --stage1-config PATH  Override the Stage1 config only.
+  --stage2-config PATH  Override the Stage2 config only.
   --stage1-only         Run only Stage1 after optional preparation.
   --stage2-only         Run only Stage2 after optional sample preparation.
   --with-holdout        Run infer_holdout.py for each fold after Stage2.
@@ -53,6 +57,19 @@ while [[ $# -gt 0 ]]; do
     --skip-prepare)
       RUN_PREPARE=0
       shift
+      ;;
+    --config)
+      STAGE1_CONFIG="$2"
+      STAGE2_CONFIG="$2"
+      shift 2
+      ;;
+    --stage1-config)
+      STAGE1_CONFIG="$2"
+      shift 2
+      ;;
+    --stage2-config)
+      STAGE2_CONFIG="$2"
+      shift 2
       ;;
     --stage1-only)
       RUN_STAGE2=0
@@ -195,6 +212,8 @@ echo "Python: ${PYTHON_BIN}"
 echo "Folds:  ${FOLDS}"
 echo "GPUs:   ${GPUS}"
 echo "Logs:   ${LOG_DIR}"
+echo "Stage1 config: ${STAGE1_CONFIG}"
+echo "Stage2 config: ${STAGE2_CONFIG}"
 echo "Test holdout ratio: ${TEST_RATIO}"
 echo "Test holdout seed:  ${TEST_SEED}"
 

@@ -26,13 +26,13 @@ from src.mining import (
 from src.model import build_model_from_config, collect_model_diagnostics
 from src.samples import load_samples, split_samples_for_fold
 from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, load_compatible_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
-from src.utils import ensure_dir, load_yaml, read_csv_rows, seed_worker, set_seed, write_csv_rows
+from src.utils import ensure_dir, load_stage_config, read_csv_rows, save_json, seed_worker, set_seed, write_csv_rows
 from scripts.evaluate_val import evaluate_and_save_stage2
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train stage2 full-image segmentation model")
-    parser.add_argument("--config", type=str, default="configs/stage2.yaml", help="Path to config file")
+    parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to config file")
     parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
@@ -233,11 +233,13 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
     }
 
 
-def build_stage2_train_loader(rows, cfg, device):
+def build_stage2_train_loader(rows, cfg, device, seed=None):
     image_size = int(cfg.get("image_size", 640))
     batch_size = int(cfg.get("batch_size", 4))
     num_workers = int(cfg.get("num_workers", 8))
-    seed = int(cfg.get("seed", 42))
+    if seed is None:
+        seed = int(cfg.get("seed", 42))
+    seed = int(seed)
 
     dataset = ROIDataset(
         rows,
@@ -430,7 +432,7 @@ def summarize_stage2_result(val_stats):
 def main():
     args = parse_args()
 
-    cfg = load_yaml(resolve_path(args.config))
+    cfg = load_stage_config(resolve_path(args.config), "stage2")
     fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
     cfg = apply_fold_overrides(cfg, fold)
 
@@ -482,6 +484,7 @@ def main():
 
     save_dir = resolve_path(cfg["save_dir"])
     ensure_dir(save_dir)
+    save_json(save_dir / "resolved_config.json", cfg)
 
     best_ckpt_path = save_dir / "best_stage2.pt"
     last_ckpt_path = save_dir / "last_stage2.pt"
@@ -503,6 +506,7 @@ def main():
     print(f"train_eval_min_area = {train_eval_min_area}")
     print(f"save_dir = {save_dir}")
 
+    training_failed = False
     try:
         for epoch_index in range(epochs):
             epoch = epoch_index + 1
@@ -515,7 +519,7 @@ def main():
                 epoch_seed,
                 cfg,
             )
-            train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device)
+            train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device, seed=epoch_seed)
 
             train_stats = train_one_epoch(
                 model,
@@ -679,6 +683,9 @@ def main():
             if should_stop:
                 print("early stopping triggered, stage2 stopped early.")
                 break
+    except Exception:
+        training_failed = True
+        raise
     finally:
         if bool(cfg.get("auto_evaluate_after_train", True)) and best_ckpt_path.exists():
             try:
@@ -690,6 +697,8 @@ def main():
                 )
                 print("automatic validation export finished.")
             except Exception as exc:
+                if bool(cfg.get("auto_evaluate_strict", False)) and not training_failed:
+                    raise
                 print(f"Warning: automatic validation export failed. Detail: {exc}")
 
     print("stage2 training finished.")
