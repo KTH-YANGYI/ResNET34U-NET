@@ -19,7 +19,8 @@ Usage:
   bash scripts/run_811_experiment_plan.sh [options]
 
 Options:
-  --scope NAME          sanity, phase1, phase2, or phase2_full. Default: phase1.
+  --scope NAME          sanity, phase1, phase2_single, phase2, or phase2_full.
+                        Default: phase1.
   --baseline-profile P  Baseline profile for phase2: full, normal_fp_loss,
                         no_hard_normal, or no_stage1. Default: full.
   --gpus IDS           Comma-separated GPU ids to expose. Default: 0,1,2,3.
@@ -31,6 +32,9 @@ Options:
 Scopes:
   sanity       M0 baseline seed 20260515 only.
   phase1       Baseline selection: M0/T1/T2/T3 seed 20260515 only.
+  phase2_single
+               Single-seed architecture comparison after baseline is chosen:
+               M0/M1/M2/M3/M4/M5/M6 seed 20260515 only.
   phase2       Architecture comparison after baseline is chosen:
                M0/M1/M4/M5 3 seeds, M2/M3/M6 1 seed.
   phase2_full  phase2 plus M2/M3 3 seeds.
@@ -76,7 +80,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$SCOPE" in
-  sanity|phase1|phase2|phase2_full)
+  sanity|phase1|phase2_single|phase2|phase2_full)
     ;;
   *)
     echo "Unsupported scope: $SCOPE" >&2
@@ -95,6 +99,8 @@ esac
 
 if [[ "$SCOPE" == "phase1" || "$SCOPE" == "sanity" ]]; then
   RUN_ROOT_REL="$PLAN_ROOT/phase1_baseline_selection"
+elif [[ "$SCOPE" == "phase2_single" ]]; then
+  RUN_ROOT_REL="$PLAN_ROOT/phase2_architecture_${BASELINE_PROFILE}_single_seed"
 elif [[ "$SCOPE" == "phase2_full" ]]; then
   RUN_ROOT_REL="$PLAN_ROOT/phase2_architecture_${BASELINE_PROFILE}_full"
 else
@@ -534,11 +540,13 @@ run_logged "prepare_samples" "$PYTHON_BIN" scripts/prepare_samples.py --dataset-
 run_logged "build_patch_index" "$PYTHON_BIN" scripts/build_patch_index.py --config "$CANONICAL_CONFIG"
 
 ACTIVE_BASELINE_EXTRA_YAML=""
-if [[ "$SCOPE" == "phase2" || "$SCOPE" == "phase2_full" ]]; then
+if [[ "$SCOPE" == "phase2_single" || "$SCOPE" == "phase2" || "$SCOPE" == "phase2_full" ]]; then
   ACTIVE_BASELINE_EXTRA_YAML="$(baseline_profile_yaml)"
 fi
 
-if [[ "$SCOPE" == "phase2" || "$SCOPE" == "phase2_full" ]]; then
+if [[ "$SCOPE" == "phase2_single" ]]; then
+  seeds=(20260515)
+elif [[ "$SCOPE" == "phase2" || "$SCOPE" == "phase2_full" ]]; then
   seeds=(20260515 20260516 20260517)
 else
   seeds=(20260515)
