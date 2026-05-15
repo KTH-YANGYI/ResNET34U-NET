@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.samples import load_samples, split_samples_for_fold
+from src.samples import load_samples, split_samples
 from src.utils import load_stage_config
 
 
@@ -66,10 +66,6 @@ def resolve_path(path_text):
     return path
 
 
-def resolve_fold_template(template_text, fold):
-    return resolve_path(str(template_text).format(fold=int(fold)))
-
-
 def normalize_int_list(value, default_values):
     if value is None:
         return [int(item) for item in default_values]
@@ -85,7 +81,6 @@ def load_patch_cfg(config_path):
 
     return {
         "seed": int(cfg.get("seed", 42)),
-        "n_folds": int(cfg.get("n_folds", 4)),
         "samples_path": str(cfg.get("samples_path", "")).strip(),
         "patch_out_size": int(cfg.get("patch_out_size", 384)),
         "positive_center_crop_sizes": normalize_int_list(cfg.get("positive_center_crop_sizes"), [320, 384, 448]),
@@ -106,8 +101,8 @@ def load_patch_cfg(config_path):
         "max_components_per_image": int(cfg.get("max_components_per_image", 3)),
         "max_positive_patches_per_image": int(cfg.get("max_positive_patches_per_image", 6)),
         "max_attempts_per_patch": int(cfg.get("max_attempts_per_patch", 20)),
-        "train_index_path_template": str(cfg.get("train_index_path_template", "manifests/stage1_fold{fold}_train_index.csv")),
-        "val_index_path_template": str(cfg.get("val_index_path_template", "manifests/stage1_fold{fold}_val_index.csv")),
+        "train_index_path": str(cfg.get("train_index_path", "manifests/stage1_train_index.csv")),
+        "val_index_path": str(cfg.get("val_index_path", "manifests/stage1_val_index.csv")),
         "patch_summary_path": str(cfg.get("patch_summary_path", "manifests/stage1_patch_summary.json")),
         "patch_train_seed_offset": int(cfg.get("patch_train_seed_offset", 1000)),
         "patch_val_seed_offset": int(cfg.get("patch_val_seed_offset", 2000)),
@@ -945,92 +940,66 @@ def write_patch_index_csv(path, patch_rows):
 def main():
     args = parse_args()
     patch_cfg = load_patch_cfg(args.config)
-    sample_rows = None
-    if patch_cfg["samples_path"] != "":
-        sample_rows = load_samples(patch_cfg["samples_path"], PROJECT_ROOT)
+
+    if patch_cfg["samples_path"] == "":
+        raise ValueError("stage1.samples_path is required for the active train/val/test pipeline")
+
+    sample_rows = load_samples(patch_cfg["samples_path"], PROJECT_ROOT)
+    defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = split_samples(sample_rows)
+
+    train_seed = int(patch_cfg["seed"]) + int(patch_cfg["patch_train_seed_offset"])
+    val_seed = int(patch_cfg["seed"]) + int(patch_cfg["patch_val_seed_offset"])
+
+    train_patch_rows, train_summary = build_patch_index_for_split(
+        defect_rows=defect_train_rows,
+        normal_rows=normal_train_rows,
+        seed=train_seed,
+        patch_cfg=patch_cfg,
+    )
+    val_patch_rows, val_summary = build_patch_index_for_split(
+        defect_rows=defect_val_rows,
+        normal_rows=normal_val_rows,
+        seed=val_seed,
+        patch_cfg=patch_cfg,
+    )
+
+    train_index_path = resolve_path(patch_cfg["train_index_path"])
+    val_index_path = resolve_path(patch_cfg["val_index_path"])
+    write_patch_index_csv(train_index_path, train_patch_rows)
+    write_patch_index_csv(val_index_path, val_patch_rows)
 
     summary = {
-        "n_folds": int(patch_cfg["n_folds"]),
         "patch_out_size": int(patch_cfg["patch_out_size"]),
         "samples_path": patch_cfg["samples_path"],
         "patch_cfg": {
             key: value
             for key, value in patch_cfg.items()
-            if key not in {"n_folds", "patch_out_size", "samples_path"}
+            if key not in {"patch_out_size", "samples_path"}
         },
-        "folds": [],
+        "defect_train_image_count": len(defect_train_rows),
+        "defect_val_image_count": len(defect_val_rows),
+        "normal_train_image_count": len(normal_train_rows),
+        "normal_val_image_count": len(normal_val_rows),
+        "train_seed": train_seed,
+        "val_seed": val_seed,
+        "train_index_path": str(train_index_path),
+        "val_index_path": str(val_index_path),
+        "train_patch_summary": train_summary,
+        "val_patch_summary": val_summary,
     }
 
-    for fold_index in range(int(patch_cfg["n_folds"])):
-        if sample_rows is not None:
-            defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = split_samples_for_fold(
-                sample_rows,
-                fold=fold_index,
-            )
-        else:
-            defect_train_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_train.csv")
-            defect_val_rows = read_csv_rows(MANIFEST_DIR / f"defect_fold{fold_index}_val.csv")
-            normal_train_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_train.csv")
-            normal_val_rows = read_csv_rows(MANIFEST_DIR / f"normal_fold{fold_index}_val.csv")
-
-        train_seed = (
-            int(patch_cfg["seed"])
-            + int(patch_cfg["patch_train_seed_offset"])
-            + fold_index
-        )
-        val_seed = (
-            int(patch_cfg["seed"])
-            + int(patch_cfg["patch_val_seed_offset"])
-            + fold_index
-        )
-
-        train_patch_rows, train_summary = build_patch_index_for_split(
-            defect_rows=defect_train_rows,
-            normal_rows=normal_train_rows,
-            seed=train_seed,
-            patch_cfg=patch_cfg,
-        )
-        val_patch_rows, val_summary = build_patch_index_for_split(
-            defect_rows=defect_val_rows,
-            normal_rows=normal_val_rows,
-            seed=val_seed,
-            patch_cfg=patch_cfg,
-        )
-
-        train_index_path = resolve_fold_template(patch_cfg["train_index_path_template"], fold_index)
-        val_index_path = resolve_fold_template(patch_cfg["val_index_path_template"], fold_index)
-
-        write_patch_index_csv(train_index_path, train_patch_rows)
-        write_patch_index_csv(val_index_path, val_patch_rows)
-
-        fold_summary = {
-            "fold_index": fold_index,
-            "defect_train_image_count": len(defect_train_rows),
-            "defect_val_image_count": len(defect_val_rows),
-            "normal_train_image_count": len(normal_train_rows),
-            "normal_val_image_count": len(normal_val_rows),
-            "train_seed": train_seed,
-            "val_seed": val_seed,
-            "train_index_path": str(train_index_path),
-            "val_index_path": str(val_index_path),
-            "train_patch_summary": train_summary,
-            "val_patch_summary": val_summary,
-        }
-        summary["folds"].append(fold_summary)
-
-        print(
-            f"fold {fold_index}: "
-            f"train_total={train_summary['total_count']} "
-            f"(pos={train_summary['positive_count']}, "
-            f"near_miss={train_summary['near_miss_negative_count']}, "
-            f"hard_neg={train_summary['hard_negative_count']}, "
-            f"normal_neg={train_summary['normal_negative_count']}), "
-            f"val_total={val_summary['total_count']} "
-            f"(pos={val_summary['positive_count']}, "
-            f"near_miss={val_summary['near_miss_negative_count']}, "
-            f"hard_neg={val_summary['hard_negative_count']}, "
-            f"normal_neg={val_summary['normal_negative_count']})"
-        )
+    print(
+        f"train_total={train_summary['total_count']} "
+        f"(pos={train_summary['positive_count']}, "
+        f"near_miss={train_summary['near_miss_negative_count']}, "
+        f"hard_neg={train_summary['hard_negative_count']}, "
+        f"normal_neg={train_summary['normal_negative_count']}), "
+        f"val_total={val_summary['total_count']} "
+        f"(pos={val_summary['positive_count']}, "
+        f"near_miss={val_summary['near_miss_negative_count']}, "
+        f"hard_neg={val_summary['hard_negative_count']}, "
+        f"normal_neg={val_summary['normal_negative_count']})"
+    )
 
     summary_path = resolve_path(patch_cfg["patch_summary_path"])
     save_json(summary_path, summary)

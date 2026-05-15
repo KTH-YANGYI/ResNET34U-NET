@@ -206,29 +206,32 @@ def validate_stage_config(cfg, section):
     required_by_section = {
         "stage1": [
             "seed",
-            "n_folds",
             "samples_path",
             "patch_out_size",
-            "train_index_path_template",
-            "val_index_path_template",
-            "save_dir_template",
+            "train_index_path",
+            "val_index_path",
+            "save_dir",
         ],
         "stage2": [
             "seed",
-            "n_folds",
             "samples_path",
             "model_variant",
             "image_size",
-            "stage1_checkpoint_template",
-            "save_dir_template",
+            "stage1_checkpoint",
+            "save_dir",
         ],
     }
     required_keys = required_by_section.get(section, [])
-    missing_keys = [
-        key
-        for key in required_keys
-        if key not in cfg or cfg[key] is None or str(cfg[key]).strip() == ""
-    ]
+    allow_empty_values = {
+        "stage2": {"stage1_checkpoint"},
+    }.get(section, set())
+    missing_keys = []
+    for key in required_keys:
+        if key not in cfg or cfg[key] is None:
+            missing_keys.append(key)
+            continue
+        if key not in allow_empty_values and str(cfg[key]).strip() == "":
+            missing_keys.append(key)
     if missing_keys:
         raise ValueError(
             f"Canonical {section} config is missing required key(s): "

@@ -1,0 +1,135 @@
+Project: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage
+Dataset: ../dataset_crack_normal_unet_811
+Scope:   phase1
+Baseline profile: full
+GPUs:    0,1,2,3
+Plan:    outputs/experiments/811_fixed_split
+Run dir: outputs/experiments/811_fixed_split/phase1_baseline_selection
+[2026-05-15 04:15:35] start check_environment
+[2026-05-15 04:15:42] done  check_environment | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/check_environment.log
+[2026-05-15 04:15:43] start prepare_samples
+[2026-05-15 04:15:44] done  prepare_samples | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/prepare_samples.log
+[2026-05-15 04:15:45] start build_patch_index
+[2026-05-15 04:16:23] done  build_patch_index | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/build_patch_index.log
+[2026-05-15 04:16:24] start stage1_s20260515
+[2026-05-15 04:21:25] fail  stage1_s20260515 | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/stage1_s20260515.log
+    logits = get_primary_logits(model(images))
+                                ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/parallel/distributed.py", line 1519, in forward
+    else self._run_ddp_forward(*inputs, **kwargs)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/parallel/distributed.py", line 1355, in _run_ddp_forward
+    return self.module(*inputs, **kwargs)  # type: ignore[index]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/models/resnet34_unet_baseline.py", line 116, in forward
+    logits = self.segmentation_head(d1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/batchnorm.py", line 171, in forward
+    return F.batch_norm(
+           ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/functional.py", line 2478, in batch_norm
+    return torch.batch_norm(
+           ^^^^^^^^^^^^^^^^^
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 7.88 GiB. GPU 0 has a total capacty of 39.49 GiB of which 2.56 GiB is free. Including non-PyTorch memory, this process has 36.92 GiB memory in use. Of the allocated memory 33.43 GiB is allocated by PyTorch, and 2.08 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+Traceback (most recent call last):
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage1.py", line 546, in <module>
+Traceback (most recent call last):
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage1.py", line 546, in <module>
+    main()
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage1.py", line 516, in main
+    replay_rows, replay_summary = broadcast_object((replay_rows, replay_summary), dist_context)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/parallel.py", line 173, in broadcast_object
+    main()
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage1.py", line 516, in main
+    dist.broadcast_object_list(payload, src=int(src), group=object_group)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/c10d_logger.py", line 47, in wrapper
+    replay_rows, replay_summary = broadcast_object((replay_rows, replay_summary), dist_context)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/parallel.py", line 173, in broadcast_object
+    dist.broadcast_object_list(payload, src=int(src), group=object_group)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/c10d_logger.py", line 47, in wrapper
+    return func(*args, **kwargs)
+           ^^^^    ^return func(*args, **kwargs)^
+^^^^^^^^^^^^^^^ 
+     File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/distributed_c10d.py", line 2605, in broadcast_object_list
+       ^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/distributed_c10d.py", line 2605, in broadcast_object_list
+    broadcast(object_sizes_tensor, src=src, group=group)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/c10d_logger.py", line 47, in wrapper
+    broadcast(object_sizes_tensor, src=src, group=group)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/c10d_logger.py", line 47, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^    ^return func(*args, **kwargs)^
+^^^^^^^^^^
+    File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/distributed_c10d.py", line 1916, in broadcast
+         ^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/distributed_c10d.py", line 1916, in broadcast
+    work.wait()
+RuntimeError: [/dev/shm/PyTorch/2.1.2/foss-2023a-CUDA-12.1.1/pytorch-v2.1.2/third_party/gloo/gloo/transport/tcp/pair.cc:534] Connection closed by peer [10.21.30.41]:17334
+    work.wait()
+RuntimeError: [/dev/shm/PyTorch/2.1.2/foss-2023a-CUDA-12.1.1/pytorch-v2.1.2/third_party/gloo/gloo/transport/tcp/pair.cc:534] Connection closed by peer [10.21.30.41]:17334
+[2026-05-15 04:21:24,605] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3079666 closing signal SIGTERM
+[2026-05-15 04:21:24,605] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3079667 closing signal SIGTERM
+[2026-05-15 04:21:24,606] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3079668 closing signal SIGTERM
+[2026-05-15 04:21:24,607] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 3079665) of binary: /apps/Arch/software/Python/3.11.3-GCCcore-12.3.0/bin/python
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 810, in <module>
+    main()
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+scripts/train_stage1.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-05-15_04:21:24
+  host      : alvis3-03.int.private
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 3079665)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

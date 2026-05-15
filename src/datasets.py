@@ -4,11 +4,12 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 
 
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(3, 1, 1)
 IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(3, 1, 1)
+NATIVE_SIZE_TOKENS = {"", "none", "native", "original", "orig", "source", "full"}
 
 
 def to_bool(value):
@@ -19,14 +20,241 @@ def to_bool(value):
     return text in {"1", "true", "yes", "y"}
 
 
+def is_native_size(size):
+    if size is None:
+        return True
+
+    if isinstance(size, str):
+        return size.strip().lower() in NATIVE_SIZE_TOKENS
+
+    return False
+
+
 def normalize_size(size):
+    if is_native_size(size):
+        raise ValueError("native/original size cannot be normalized")
+
     if isinstance(size, int):
         return size, size
 
     if isinstance(size, (tuple, list)) and len(size) == 2:
         return int(size[0]), int(size[1])
 
-    raise ValueError("size must be an int or a (height, width) pair")
+    if isinstance(size, str):
+        text = size.strip().lower()
+        separator = "x" if "x" in text else "," if "," in text else None
+        if separator is not None:
+            parts = [part.strip() for part in text.split(separator)]
+            if len(parts) == 2:
+                return int(parts[0]), int(parts[1])
+
+        value = int(text)
+        return value, value
+
+    raise ValueError("size must be an int, a HxW string, or a (height, width) pair")
+
+
+def resolve_transform_size(size):
+    if is_native_size(size):
+        return None
+
+    return normalize_size(size)
+
+
+def image_size_hw(path):
+    with Image.open(Path(path)) as image:
+        width, height = image.size
+
+    return int(height), int(width)
+
+
+def image_size_key(height, width):
+    return f"{int(height)}x{int(width)}"
+
+
+def reverse_image_size_key(key):
+    parts = str(key).strip().lower().split("x")
+    if len(parts) != 2:
+        return None
+
+    return f"{parts[1]}x{parts[0]}"
+
+
+def image_size_key_from_row(row):
+    height = (
+        row.get("image_height")
+        or row.get("height")
+        or row.get("original_height")
+        or row.get("h")
+    )
+    width = (
+        row.get("image_width")
+        or row.get("width")
+        or row.get("original_width")
+        or row.get("w")
+    )
+
+    if height not in {None, ""} and width not in {None, ""}:
+        return image_size_key(height, width)
+
+    height, width = image_size_hw(row["image_path"])
+    return image_size_key(height, width)
+
+
+def stage2_uses_native_size(cfg):
+    if cfg is None:
+        return False
+
+    if to_bool(cfg.get("stage2_native_size", False)):
+        return True
+
+    return is_native_size(cfg.get("image_size", 640))
+
+
+def resolve_stage2_image_size(cfg):
+    if stage2_uses_native_size(cfg):
+        return None
+
+    if cfg is None:
+        return 640
+
+    return cfg.get("image_size", 640)
+
+
+def stage2_batch_size_by_image_size(cfg):
+    if cfg is None:
+        return {}
+
+    mapping = cfg.get("batch_size_by_image_size", cfg.get("stage2_batch_size_by_image_size", {}))
+    if mapping is None:
+        return {}
+
+    return {str(key).strip(): int(value) for key, value in dict(mapping).items()}
+
+
+class SameSizeBatchSampler(Sampler):
+    def __init__(
+        self,
+        rows,
+        default_batch_size,
+        batch_size_by_image_size=None,
+        shuffle=False,
+        seed=42,
+        drop_last=False,
+        num_replicas=1,
+        rank=0,
+    ):
+        self.rows = list(rows)
+        self.default_batch_size = max(1, int(default_batch_size))
+        self.batch_size_by_image_size = batch_size_by_image_size or {}
+        self.shuffle = bool(shuffle)
+        self.seed = int(seed)
+        self.drop_last = bool(drop_last)
+        self.num_replicas = max(1, int(num_replicas))
+        self.rank = int(rank)
+        if self.rank < 0 or self.rank >= self.num_replicas:
+            raise ValueError("rank must be in [0, num_replicas)")
+
+        self.groups = {}
+        for index, row in enumerate(self.rows):
+            key = image_size_key_from_row(row)
+            self.groups.setdefault(key, []).append(index)
+
+        self.group_keys = sorted(self.groups.keys())
+
+    def _batch_size(self, key):
+        if key in self.batch_size_by_image_size:
+            return max(1, int(self.batch_size_by_image_size[key]))
+
+        reversed_key = reverse_image_size_key(key)
+        if reversed_key in self.batch_size_by_image_size:
+            return max(1, int(self.batch_size_by_image_size[reversed_key]))
+
+        return self.default_batch_size
+
+    def __iter__(self):
+        rng = random.Random(self.seed)
+        batches = []
+
+        for key in self.group_keys:
+            indices = list(self.groups[key])
+            if self.shuffle:
+                rng.shuffle(indices)
+
+            if self.num_replicas > 1:
+                local_size = (len(indices) + self.num_replicas - 1) // self.num_replicas
+                total_size = local_size * self.num_replicas
+                padding = total_size - len(indices)
+                if padding > 0 and len(indices) > 0:
+                    indices = indices + (indices * ((padding + len(indices) - 1) // len(indices)))[:padding]
+                indices = indices[self.rank:total_size:self.num_replicas]
+
+            batch_size = self._batch_size(key)
+            for start in range(0, len(indices), batch_size):
+                batch = indices[start:start + batch_size]
+                if self.drop_last and len(batch) < batch_size:
+                    continue
+                batches.append(batch)
+
+        if self.shuffle:
+            rng.shuffle(batches)
+
+        for batch in batches:
+            yield batch
+
+    def __len__(self):
+        total = 0
+        for key in self.group_keys:
+            count = len(self.groups[key])
+            if self.num_replicas > 1:
+                count = (count + self.num_replicas - 1) // self.num_replicas
+            batch_size = self._batch_size(key)
+            full_batches, remainder = divmod(count, batch_size)
+            total += full_batches
+            if remainder > 0 and not self.drop_last:
+                total += 1
+        return total
+
+    def summary(self):
+        return [
+            {
+                "image_size": key,
+                "count": (len(self.groups[key]) + self.num_replicas - 1) // self.num_replicas
+                if self.num_replicas > 1
+                else len(self.groups[key]),
+                "batch_size": self._batch_size(key),
+                "rank": self.rank,
+                "num_replicas": self.num_replicas,
+            }
+            for key in self.group_keys
+        ]
+
+
+def build_same_size_batch_sampler(
+    rows,
+    cfg,
+    default_batch_size,
+    shuffle=False,
+    seed=42,
+    drop_last=False,
+    batch_size_by_image_size=None,
+    num_replicas=1,
+    rank=0,
+):
+    return SameSizeBatchSampler(
+        rows=rows,
+        default_batch_size=default_batch_size,
+        batch_size_by_image_size=(
+            stage2_batch_size_by_image_size(cfg)
+            if batch_size_by_image_size is None
+            else batch_size_by_image_size
+        ),
+        shuffle=shuffle,
+        seed=seed,
+        drop_last=drop_last,
+        num_replicas=num_replicas,
+        rank=rank,
+    )
 
 
 def read_image_rgb(path):
@@ -86,12 +314,13 @@ def normalize_image_tensor(image_tensor, use_imagenet_normalize=False):
 
 class BasicSegTransform:
     def __init__(self, target_size, use_imagenet_normalize=False):
-        self.target_size = target_size
+        self.target_size = resolve_transform_size(target_size)
         self.use_imagenet_normalize = bool(use_imagenet_normalize)
 
     def finalize(self, image, mask):
-        image = resize_image(image, self.target_size)
-        mask = resize_mask(mask, self.target_size)
+        if self.target_size is not None:
+            image = resize_image(image, self.target_size)
+            mask = resize_mask(mask, self.target_size)
 
         image_tensor = image_to_tensor(image)
         image_tensor = normalize_image_tensor(image_tensor, use_imagenet_normalize=self.use_imagenet_normalize)

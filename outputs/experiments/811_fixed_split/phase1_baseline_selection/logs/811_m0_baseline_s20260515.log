@@ -1,0 +1,148 @@
+master_addr is only used for static rdzv_backend and when rdzv_endpoint is not specified.
+WARNING:__main__:
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+device = cuda:0
+parallel = {'ddp': True, 'requested': True, 'device_type': 'cuda', 'rank': 0, 'local_rank': 0, 'world_size': 4, 'backend': 'nccl', 'find_unused_parameters': False}
+stage1_checkpoint = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/stage1_s20260515/stage1/best_stage1.pt
+defect_train_count = 371
+defect_val_count = 47
+normal_train_count = 274
+normal_val_count = 34
+stage2_native_size = True
+val_native_batch_summary = [{"image_size": "3840x2160", "count": 47, "batch_size": 4, "rank": 0, "num_replicas": 1}, {"image_size": "640x640", "count": 34, "batch_size": 80, "rank": 0, "num_replicas": 1}]
+train_eval_postprocess_search = False
+train_eval_threshold = 0.5
+train_eval_min_area = 0
+save_dir = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/811_m0_baseline_s20260515/stage2
+train_native_batch_summary = [{"image_size": "3840x2160", "count": 94, "batch_size": 4, "rank": 0, "num_replicas": 4}, {"image_size": "640x640", "count": 68, "batch_size": 80, "rank": 0, "num_replicas": 4}]
+epoch 1/50 | random_normal=274 | hard_normal=0/0 | hard_pool=0 | train_loss=0.645175 | defect_dice=0.320155 | defect_iou=0.205229 | defect_recall=0.978723 | normal_fpr=1.000000 | normal_fp=34/34 | thr=0.50 | min_area=0 | stage2_score=-1.479845 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 2/50 | random_normal=274 | hard_normal=0/0 | hard_pool=0 | train_loss=0.631653 | defect_dice=0.365189 | defect_iou=0.243352 | defect_recall=0.978723 | normal_fpr=0.882353 | normal_fp=30/34 | thr=0.50 | min_area=0 | stage2_score=-1.199517 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 3/50 | random_normal=223 | hard_normal=148/148 | hard_pool=244 | train_loss=0.623567 | defect_dice=0.463944 | defect_iou=0.326513 | defect_recall=0.978723 | normal_fpr=0.882353 | normal_fp=30/34 | thr=0.50 | min_area=0 | stage2_score=-1.100762 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 4/50 | random_normal=223 | hard_normal=148/148 | hard_pool=244 | train_loss=0.617138 | defect_dice=0.574529 | defect_iou=0.427348 | defect_recall=0.978723 | normal_fpr=0.911765 | normal_fp=31/34 | thr=0.50 | min_area=0 | stage2_score=-1.049000 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 5/50 | random_normal=223 | hard_normal=148/148 | hard_pool=244 | train_loss=0.610921 | defect_dice=0.649505 | defect_iou=0.504458 | defect_recall=0.978723 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.621083 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 6/50 | random_normal=223 | hard_normal=148/148 | hard_pool=244 | train_loss=0.604555 | defect_dice=0.632074 | defect_iou=0.483872 | defect_recall=1.000000 | normal_fpr=0.823529 | normal_fp=28/34 | thr=0.50 | min_area=0 | stage2_score=-0.814985 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 7/50 | random_normal=223 | hard_normal=148/148 | hard_pool=194 | train_loss=0.600647 | defect_dice=0.523090 | defect_iou=0.375000 | defect_recall=1.000000 | normal_fpr=0.882353 | normal_fp=30/34 | thr=0.50 | min_area=0 | stage2_score=-1.041616 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 8/50 | random_normal=223 | hard_normal=148/148 | hard_pool=194 | train_loss=0.596193 | defect_dice=0.580639 | defect_iou=0.443781 | defect_recall=0.936170 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.748773 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 9/50 | random_normal=223 | hard_normal=148/148 | hard_pool=216 | train_loss=0.591920 | defect_dice=0.572493 | defect_iou=0.424587 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.815743 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 10/50 | random_normal=223 | hard_normal=148/148 | hard_pool=216 | train_loss=0.587603 | defect_dice=0.496073 | defect_iou=0.348293 | defect_recall=1.000000 | normal_fpr=0.823529 | normal_fp=28/34 | thr=0.50 | min_area=0 | stage2_score=-0.950986 | lr_encoder=2.000000e-05 | lr_decoder=1.000000e-04
+epoch 11/50 | random_normal=223 | hard_normal=148/148 | hard_pool=235 | train_loss=0.584426 | defect_dice=0.495330 | defect_iou=0.351135 | defect_recall=1.000000 | normal_fpr=0.852941 | normal_fp=29/34 | thr=0.50 | min_area=0 | stage2_score=-1.010552 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 12/50 | random_normal=223 | hard_normal=148/148 | hard_pool=235 | train_loss=0.582032 | defect_dice=0.545259 | defect_iou=0.404672 | defect_recall=1.000000 | normal_fpr=0.882353 | normal_fp=30/34 | thr=0.50 | min_area=0 | stage2_score=-1.019447 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 13/50 | random_normal=223 | hard_normal=148/148 | hard_pool=248 | train_loss=0.579937 | defect_dice=0.538428 | defect_iou=0.389854 | defect_recall=1.000000 | normal_fpr=0.882353 | normal_fp=30/34 | thr=0.50 | min_area=0 | stage2_score=-1.026278 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 14/50 | random_normal=223 | hard_normal=148/148 | hard_pool=248 | train_loss=0.577583 | defect_dice=0.606291 | defect_iou=0.467018 | defect_recall=1.000000 | normal_fpr=0.823529 | normal_fp=28/34 | thr=0.50 | min_area=0 | stage2_score=-0.840768 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 15/50 | random_normal=223 | hard_normal=148/148 | hard_pool=220 | train_loss=0.575828 | defect_dice=0.611783 | defect_iou=0.461035 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.717628 | lr_encoder=1.000000e-05 | lr_decoder=5.000000e-05
+epoch 16/50 | random_normal=223 | hard_normal=148/148 | hard_pool=220 | train_loss=0.574248 | defect_dice=0.580983 | defect_iou=0.433833 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.807253 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 17/50 | random_normal=223 | hard_normal=148/148 | hard_pool=221 | train_loss=0.572839 | defect_dice=0.659579 | defect_iou=0.512346 | defect_recall=1.000000 | normal_fpr=0.647059 | normal_fp=22/34 | thr=0.50 | min_area=0 | stage2_score=-0.434539 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 18/50 | random_normal=223 | hard_normal=148/148 | hard_pool=221 | train_loss=0.571484 | defect_dice=0.642329 | defect_iou=0.496695 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.687082 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 19/50 | random_normal=223 | hard_normal=148/148 | hard_pool=185 | train_loss=0.570511 | defect_dice=0.603901 | defect_iou=0.453266 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.725510 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 20/50 | random_normal=223 | hard_normal=148/148 | hard_pool=185 | train_loss=0.569527 | defect_dice=0.605653 | defect_iou=0.459149 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.782583 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 21/50 | random_normal=223 | hard_normal=148/148 | hard_pool=210 | train_loss=0.568308 | defect_dice=0.645387 | defect_iou=0.498844 | defect_recall=1.000000 | normal_fpr=0.823529 | normal_fp=28/34 | thr=0.50 | min_area=0 | stage2_score=-0.801672 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 22/50 | random_normal=223 | hard_normal=148/148 | hard_pool=210 | train_loss=0.567137 | defect_dice=0.562194 | defect_iou=0.415730 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.826041 | lr_encoder=5.000000e-06 | lr_decoder=2.500000e-05
+epoch 23/50 | random_normal=223 | hard_normal=148/148 | hard_pool=208 | train_loss=0.566286 | defect_dice=0.631250 | defect_iou=0.484655 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.698162 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+epoch 24/50 | random_normal=223 | hard_normal=148/148 | hard_pool=208 | train_loss=0.565968 | defect_dice=0.626062 | defect_iou=0.480483 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.762173 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+epoch 25/50 | random_normal=223 | hard_normal=148/148 | hard_pool=210 | train_loss=0.565384 | defect_dice=0.628827 | defect_iou=0.481262 | defect_recall=1.000000 | normal_fpr=0.794118 | normal_fp=27/34 | thr=0.50 | min_area=0 | stage2_score=-0.759408 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+epoch 26/50 | random_normal=223 | hard_normal=148/148 | hard_pool=210 | train_loss=0.565029 | defect_dice=0.640087 | defect_iou=0.494374 | defect_recall=1.000000 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.630501 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+epoch 27/50 | random_normal=223 | hard_normal=148/148 | hard_pool=193 | train_loss=0.564324 | defect_dice=0.628704 | defect_iou=0.480853 | defect_recall=1.000000 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.641884 | lr_encoder=2.500000e-06 | lr_decoder=1.250000e-05
+epoch 28/50 | random_normal=223 | hard_normal=148/148 | hard_pool=193 | train_loss=0.564073 | defect_dice=0.658634 | defect_iou=0.511664 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.553131 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 29/50 | random_normal=223 | hard_normal=148/148 | hard_pool=169 | train_loss=0.563472 | defect_dice=0.656060 | defect_iou=0.508268 | defect_recall=1.000000 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.614528 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 30/50 | random_normal=223 | hard_normal=148/148 | hard_pool=169 | train_loss=0.563674 | defect_dice=0.642654 | defect_iou=0.497682 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.686757 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 31/50 | random_normal=223 | hard_normal=148/148 | hard_pool=185 | train_loss=0.563403 | defect_dice=0.666259 | defect_iou=0.519193 | defect_recall=1.000000 | normal_fpr=0.647059 | normal_fp=22/34 | thr=0.50 | min_area=0 | stage2_score=-0.427859 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 32/50 | random_normal=223 | hard_normal=148/148 | hard_pool=185 | train_loss=0.562928 | defect_dice=0.643213 | defect_iou=0.495091 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.568552 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 33/50 | random_normal=223 | hard_normal=148/148 | hard_pool=182 | train_loss=0.562766 | defect_dice=0.662158 | defect_iou=0.513756 | defect_recall=1.000000 | normal_fpr=0.676471 | normal_fp=23/34 | thr=0.50 | min_area=0 | stage2_score=-0.490783 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 34/50 | random_normal=223 | hard_normal=148/148 | hard_pool=182 | train_loss=0.562674 | defect_dice=0.664593 | defect_iou=0.517136 | defect_recall=1.000000 | normal_fpr=0.676471 | normal_fp=23/34 | thr=0.50 | min_area=0 | stage2_score=-0.488348 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 35/50 | random_normal=223 | hard_normal=148/148 | hard_pool=164 | train_loss=0.562234 | defect_dice=0.663548 | defect_iou=0.516784 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.548217 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 36/50 | random_normal=223 | hard_normal=148/148 | hard_pool=164 | train_loss=0.561968 | defect_dice=0.647951 | defect_iou=0.499852 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.563813 | lr_encoder=1.250000e-06 | lr_decoder=6.250000e-06
+epoch 37/50 | random_normal=223 | hard_normal=148/148 | hard_pool=172 | train_loss=0.561760 | defect_dice=0.645818 | defect_iou=0.498585 | defect_recall=1.000000 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.624771 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 38/50 | random_normal=223 | hard_normal=148/148 | hard_pool=172 | train_loss=0.561571 | defect_dice=0.677815 | defect_iou=0.531815 | defect_recall=1.000000 | normal_fpr=0.647059 | normal_fp=22/34 | thr=0.50 | min_area=0 | stage2_score=-0.416302 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 39/50 | random_normal=223 | hard_normal=148/148 | hard_pool=167 | train_loss=0.561364 | defect_dice=0.665490 | defect_iou=0.518590 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.546275 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 40/50 | random_normal=223 | hard_normal=148/148 | hard_pool=167 | train_loss=0.561364 | defect_dice=0.646946 | defect_iou=0.498849 | defect_recall=1.000000 | normal_fpr=0.764706 | normal_fp=26/34 | thr=0.50 | min_area=0 | stage2_score=-0.682466 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 41/50 | random_normal=223 | hard_normal=148/148 | hard_pool=179 | train_loss=0.561228 | defect_dice=0.664323 | defect_iou=0.518555 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.547441 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 42/50 | random_normal=223 | hard_normal=148/148 | hard_pool=179 | train_loss=0.560999 | defect_dice=0.647679 | defect_iou=0.500421 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.564086 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 43/50 | random_normal=223 | hard_normal=148/148 | hard_pool=178 | train_loss=0.561011 | defect_dice=0.662618 | defect_iou=0.516316 | defect_recall=1.000000 | normal_fpr=0.647059 | normal_fp=22/34 | thr=0.50 | min_area=0 | stage2_score=-0.431500 | lr_encoder=6.250000e-07 | lr_decoder=3.125000e-06
+epoch 44/50 | random_normal=223 | hard_normal=148/148 | hard_pool=178 | train_loss=0.560765 | defect_dice=0.652363 | defect_iou=0.505637 | defect_recall=1.000000 | normal_fpr=0.676471 | normal_fp=23/34 | thr=0.50 | min_area=0 | stage2_score=-0.500579 | lr_encoder=3.125000e-07 | lr_decoder=1.562500e-06
+epoch 45/50 | random_normal=223 | hard_normal=148/148 | hard_pool=166 | train_loss=0.560824 | defect_dice=0.659335 | defect_iou=0.512411 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.552430 | lr_encoder=3.125000e-07 | lr_decoder=1.562500e-06
+epoch 46/50 | random_normal=223 | hard_normal=148/148 | hard_pool=166 | train_loss=0.560566 | defect_dice=0.659251 | defect_iou=0.512169 | defect_recall=1.000000 | normal_fpr=0.676471 | normal_fp=23/34 | thr=0.50 | min_area=0 | stage2_score=-0.493690 | lr_encoder=3.125000e-07 | lr_decoder=1.562500e-06
+epoch 47/50 | random_normal=223 | hard_normal=148/148 | hard_pool=166 | train_loss=0.560410 | defect_dice=0.661532 | defect_iou=0.514801 | defect_recall=1.000000 | normal_fpr=0.735294 | normal_fp=25/34 | thr=0.50 | min_area=0 | stage2_score=-0.609056 | lr_encoder=3.125000e-07 | lr_decoder=1.562500e-06
+epoch 48/50 | random_normal=223 | hard_normal=148/148 | hard_pool=166 | train_loss=0.560753 | defect_dice=0.665356 | defect_iou=0.518358 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.546409 | lr_encoder=3.125000e-07 | lr_decoder=1.562500e-06
+epoch 49/50 | random_normal=223 | hard_normal=148/148 | hard_pool=174 | train_loss=0.560564 | defect_dice=0.653800 | defect_iou=0.506422 | defect_recall=1.000000 | normal_fpr=0.705882 | normal_fp=24/34 | thr=0.50 | min_area=0 | stage2_score=-0.557965 | lr_encoder=1.562500e-07 | lr_decoder=7.812500e-07
+epoch 50/50 | random_normal=223 | hard_normal=148/148 | hard_pool=174 | train_loss=0.560636 | defect_dice=0.672450 | defect_iou=0.525757 | defect_recall=1.000000 | normal_fpr=0.676471 | normal_fp=23/34 | thr=0.50 | min_area=0 | stage2_score=-0.480491 | lr_encoder=1.562500e-07 | lr_decoder=7.812500e-07
+Traceback (most recent call last):
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage2.py", line 803, in <module>
+    main()
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/train_stage2.py", line 786, in main
+    evaluate_and_save_stage2(
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/scripts/evaluate_val.py", line 133, in evaluate_and_save_stage2
+    raw_result = validate_stage2(
+                 ^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/trainer.py", line 459, in validate_stage2
+    predictions = predict_on_loader(model, loader, device, progress_desc=progress_desc, amp_enabled=amp_enabled)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/trainer.py", line 322, in predict_on_loader
+    logits = get_primary_logits(model(images))
+                                ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/src/models/resnet34_unet_baseline.py", line 116, in forward
+    logits = self.segmentation_head(d1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/container.py", line 215, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1518, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1527, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/modules/batchnorm.py", line 171, in forward
+    return F.batch_norm(
+           ^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/functional.py", line 2478, in batch_norm
+    return torch.batch_norm(
+           ^^^^^^^^^^^^^^^^^
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 7.91 GiB. GPU 0 has a total capacty of 39.49 GiB of which 2.42 GiB is free. Including non-PyTorch memory, this process has 37.01 GiB memory in use. Of the allocated memory 34.30 GiB is allocated by PyTorch, and 1.30 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+[2026-05-15 06:51:13,476] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 3098123) of binary: /apps/Arch/software/Python/3.11.3-GCCcore-12.3.0/bin/python
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 810, in <module>
+    main()
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+scripts/train_stage2.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-05-15_06:51:13
+  host      : alvis3-03.int.private
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 3098123)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

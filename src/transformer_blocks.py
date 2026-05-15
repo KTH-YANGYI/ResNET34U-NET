@@ -37,6 +37,61 @@ class TransformerBottleneck(nn.Module):
         return x + self.gamma * y
 
 
+class SpatialReductionSelfAttention(nn.Module):
+    def __init__(
+        self,
+        channels,
+        num_heads=4,
+        dropout=0.1,
+        sr_ratio=1,
+        gamma_init=0.0,
+    ):
+        super().__init__()
+        channels = int(channels)
+        num_heads = int(num_heads)
+        if channels % num_heads != 0:
+            raise ValueError("channels must be divisible by num_heads")
+
+        self.sr_ratio = max(1, int(sr_ratio))
+        self.pos = nn.Conv2d(channels, channels, kernel_size=3, padding=1, groups=channels)
+        self.q_norm = nn.LayerNorm(channels)
+        self.kv_norm = nn.LayerNorm(channels)
+        self.attn = nn.MultiheadAttention(
+            embed_dim=channels,
+            num_heads=num_heads,
+            dropout=float(dropout),
+            batch_first=True,
+        )
+        self.out_norm = nn.LayerNorm(channels)
+        self.gamma = nn.Parameter(torch.tensor(float(gamma_init)))
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+        x_pos = x + self.pos(x)
+
+        q = x_pos.flatten(2).transpose(1, 2)
+        q = self.q_norm(q)
+
+        if self.sr_ratio > 1:
+            kv_map = F.avg_pool2d(
+                x_pos,
+                kernel_size=self.sr_ratio,
+                stride=self.sr_ratio,
+                ceil_mode=True,
+                count_include_pad=False,
+            )
+        else:
+            kv_map = x_pos
+
+        kv = kv_map.flatten(2).transpose(1, 2)
+        kv = self.kv_norm(kv)
+
+        out, _ = self.attn(q, kv, kv, need_weights=False)
+        out = self.out_norm(out)
+        y = out.transpose(1, 2).reshape(b, c, h, w)
+        return x + self.gamma * y
+
+
 class SkipAttentionGate(nn.Module):
     def __init__(self, skip_channels, gate_channels, inter_channels=None, gamma_init=0.0):
         super().__init__()

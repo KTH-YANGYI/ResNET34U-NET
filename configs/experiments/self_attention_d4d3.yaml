@@ -1,0 +1,24 @@
+extends: ../canonical_baseline.yaml
+name: self_attention_d4d3
+version: "2026-05-15"
+canonical: false
+description: >
+  Decoder self-attention experiment derived from the canonical two-stage
+  baseline. This variant adds residual spatial-reduction self-attention after
+  decoder d4 and d3 features, while keeping the dataset, loss, optimizer, and
+  Stage1 initialization policy aligned with the baseline.
+
+stage2:
+  model_name: resnet34_unet_selfattn_d4d3
+  model_variant: selfattn_d4d3
+
+  self_attention_levels: ["d4", "d3"]
+  self_attention_heads: 4
+  self_attention_dropout: 0.1
+  self_attention_sr_ratios:
+    d4: 2
+    d3: 4
+  self_attention_gamma_init: 0.0
+
+  stage1_load_strict: false
+  save_dir: outputs/experiments/self_attention_d4d3/stage2

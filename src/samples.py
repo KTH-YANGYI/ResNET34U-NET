@@ -24,19 +24,8 @@ def _to_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
-def _fold_value(row):
-    text = str(row.get("cv_fold", "")).strip()
-    if text == "":
-        return None
-    return int(text)
-
-
-def _is_trainval(row):
-    return str(row.get("split", "")).strip() == "trainval"
-
-
-def is_labeled_defect(row):
-    if not _is_trainval(row):
+def _is_defect(row):
+    if str(row.get("split", "")).strip() not in {"train", "val"}:
         return False
     if str(row.get("sample_type", "")).strip() != "defect":
         return False
@@ -45,39 +34,38 @@ def is_labeled_defect(row):
     return str(row.get("mask_path", "")).strip() != ""
 
 
-def is_normal(row):
-    if not _is_trainval(row):
+def _is_normal(row):
+    if str(row.get("split", "")).strip() not in {"train", "val"}:
         return False
     return str(row.get("sample_type", "")).strip() == "normal"
 
 
-def split_samples_for_fold(rows, fold):
-    fold = int(fold)
+def split_samples(rows):
     defect_train_rows = []
     defect_val_rows = []
     normal_train_rows = []
     normal_val_rows = []
 
     for row in rows:
-        row_fold = _fold_value(row)
-        if row_fold is None:
+        split = str(row.get("split", "")).strip()
+        if split not in {"train", "val"}:
             continue
 
-        if is_labeled_defect(row):
-            if row_fold == fold:
-                defect_val_rows.append(row)
-            else:
+        if _is_defect(row):
+            if split == "train":
                 defect_train_rows.append(row)
+            else:
+                defect_val_rows.append(row)
             continue
 
-        if is_normal(row):
-            if row_fold == fold:
-                normal_val_rows.append(row)
-            else:
+        if _is_normal(row):
+            if split == "train":
                 normal_train_rows.append(row)
+            else:
+                normal_val_rows.append(row)
 
     return defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows
 
 
 def holdout_samples(rows):
-    return [row for row in rows if str(row.get("split", "")).strip() == "holdout"]
+    return [row for row in rows if str(row.get("split", "")).strip() == "test"]

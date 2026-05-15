@@ -2,7 +2,12 @@ import torch.nn.functional as F
 
 from src.models.resnet34_unet_baseline import ResNet34UNetBaseline
 from src.prototype_memory import load_prototype_bank
-from src.transformer_blocks import PrototypeCrossAttention, SkipAttentionGate, TransformerBottleneck
+from src.transformer_blocks import (
+    PrototypeCrossAttention,
+    SkipAttentionGate,
+    SpatialReductionSelfAttention,
+    TransformerBottleneck,
+)
 
 
 class TransformerBottleneckUNet(ResNet34UNetBaseline):
@@ -105,6 +110,76 @@ class SkipGateUNet(ResNet34UNetBaseline):
         d4 = self.decoder4(x4, skip3)
         skip2 = self.skip_gate_d3(x2, d4) if self.skip_gate_d3 is not None else x2
         d3 = self.decoder3(d4, skip2)
+        d2 = self.decoder2(d3, x1)
+        d1 = self.decoder1(d2, x0)
+        d1 = F.interpolate(
+            d1,
+            size=input_size,
+            mode="bilinear",
+            align_corners=False,
+        )
+        return d4, d3, d2, d1
+
+
+class DecoderSelfAttentionUNet(ResNet34UNetBaseline):
+    model_variant = "selfattn_d4d3"
+
+    def __init__(
+        self,
+        encoder_weights=None,
+        self_attention_levels=None,
+        self_attention_heads=4,
+        self_attention_dropout=0.1,
+        self_attention_sr_ratios=None,
+        self_attention_gamma_init=0.0,
+    ):
+        super().__init__(encoder_weights=encoder_weights)
+        self.self_attention_levels = set(self_attention_levels or ["d4", "d3"])
+        sr_ratios = self_attention_sr_ratios or {"d4": 2, "d3": 4}
+
+        self.self_attention_d4 = (
+            SpatialReductionSelfAttention(
+                channels=256,
+                num_heads=int(self_attention_heads),
+                dropout=float(self_attention_dropout),
+                sr_ratio=int(sr_ratios.get("d4", 2)),
+                gamma_init=float(self_attention_gamma_init),
+            )
+            if "d4" in self.self_attention_levels
+            else None
+        )
+        self.self_attention_d3 = (
+            SpatialReductionSelfAttention(
+                channels=128,
+                num_heads=int(self_attention_heads),
+                dropout=float(self_attention_dropout),
+                sr_ratio=int(sr_ratios.get("d3", 4)),
+                gamma_init=float(self_attention_gamma_init),
+            )
+            if "d3" in self.self_attention_levels
+            else None
+        )
+
+    def decoder_path_modules(self):
+        return [
+            self.decoder4,
+            self.decoder3,
+            self.decoder2,
+            self.decoder1,
+            self.self_attention_d4,
+            self.self_attention_d3,
+            self.segmentation_head,
+        ]
+
+    def decode(self, x4, x3, x2, x1, x0, input_size):
+        d4 = self.decoder4(x4, x3)
+        if self.self_attention_d4 is not None:
+            d4 = self.self_attention_d4(d4)
+
+        d3 = self.decoder3(d4, x2)
+        if self.self_attention_d3 is not None:
+            d3 = self.self_attention_d3(d3)
+
         d2 = self.decoder2(d3, x1)
         d1 = self.decoder1(d2, x0)
         d1 = F.interpolate(

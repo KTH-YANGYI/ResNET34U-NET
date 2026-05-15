@@ -8,16 +8,19 @@ description: >
 
 common:
   seed: 42
-  fold: 0
-  n_folds: 4
   samples_path: manifests/samples.csv
   device: cuda
   amp: true
+  ddp: true
+  ddp_backend: nccl
+  ddp_find_unused_parameters: true
+  data_parallel: false
+  data_parallel_device_ids: [0, 1, 2, 3]
   use_imagenet_normalize: true
 
 stage1:
   patch_out_size: 384
-  batch_size: 128
+  batch_size: 896
   epochs: 30
 
   encoder_lr: 5.0e-5
@@ -59,6 +62,7 @@ stage1:
   stage1_replay_warmup_epochs: 3
   stage1_replay_refresh_every: 3
   stage1_max_replay_ratio: 0.20
+  stage1_replay_batch_size: 224
   stage1_eval_threshold: 0.50
   stage1_target_negative_fpr: 0.20
   stage1_negative_fpr_penalty: 0.5
@@ -83,21 +87,29 @@ stage1:
   max_positive_patches_per_image: 6
   max_attempts_per_patch: 20
 
-  train_index_path_template: manifests/stage1_fold{fold}_train_index.csv
-  val_index_path_template: manifests/stage1_fold{fold}_val_index.csv
+  train_index_path: manifests/stage1_train_index.csv
+  val_index_path: manifests/stage1_val_index.csv
   patch_summary_path: manifests/stage1_patch_summary.json
   patch_train_seed_offset: 1000
   patch_val_seed_offset: 2000
-  save_dir_template: outputs/experiments/canonical_baseline/stage1/fold{fold}
+  save_dir: outputs/experiments/canonical_baseline/stage1
 
 stage2:
   model_name: canonical_resnet34_unet_pw12
   model_variant: resnet34_unet_baseline
+  ddp_find_unused_parameters: false
 
-  image_size: 640
+  image_size: native
+  stage2_native_size: true
   stage1_out_size: 384
   patch_out_size: 384
-  batch_size: 48
+  batch_size: 4
+  batch_size_by_image_size:
+    640x640: 320
+    3840x2160: 16
+  eval_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 2
   epochs: 50
 
   encoder_lr: 2.0e-5
@@ -122,8 +134,10 @@ stage2:
   allow_pretrained_fallback: false
   auto_evaluate_after_train: true
   auto_evaluate_strict: true
+  eval_include_auprc: false
 
   threshold: 0.50
+  train_eval_postprocess_search: false
   train_eval_threshold: 0.50
   train_eval_min_area: 0
 
@@ -143,6 +157,8 @@ stage2:
   threshold_grid_end: 0.95
   threshold_grid_step: 0.02
   min_area_grid: [0, 8, 16, 24, 32, 48]
+  eval_threshold_grid_step: 0.05
+  eval_min_area_grid: [0, 48]
 
   random_normal_k_factor: 1.0
   use_hard_normal_replay: true
@@ -151,8 +167,11 @@ stage2:
   hard_normal_warmup_epochs: 2
   hard_normal_refresh_every: 2
   hard_normal_pool_factor: 3.0
+  hard_normal_scan_batch_size: 4
+  hard_normal_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 4
 
   stage1_load_strict: true
-  stage1_checkpoint_template: outputs/experiments/canonical_baseline/stage1/fold{fold}/best_stage1.pt
-  save_dir_template: outputs/experiments/canonical_baseline/stage2/fold{fold}
-  global_postprocess_path: outputs/experiments/canonical_baseline/stage2/oof_global_postprocess.json
+  stage1_checkpoint: outputs/experiments/canonical_baseline/stage1/best_stage1.pt
+  save_dir: outputs/experiments/canonical_baseline/stage2

@@ -526,7 +526,16 @@ def _is_defect_sample(sample_type, gt_mask):
     return not sample_type.startswith("normal")
 
 
-def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_area=0, image_names=None, include_auprc=False):
+def evaluate_prob_maps(
+    prob_maps,
+    gt_masks,
+    sample_types,
+    threshold=0.5,
+    min_area=0,
+    image_names=None,
+    include_auprc=False,
+    include_expensive_metrics=True,
+):
     if image_names is None:
         image_names = [f"sample_{index:05d}" for index in range(len(prob_maps))]
 
@@ -551,13 +560,22 @@ def evaluate_prob_maps(prob_maps, gt_masks, sample_types, threshold=0.5, min_are
             fn_pixel_count,
         )
         fp_pixel_count = int(pred_mask.sum()) if not is_defect_image else 0
-        largest_fp_component_area = largest_component_area(pred_mask) if not is_defect_image else 0
+        if include_expensive_metrics and not is_defect_image:
+            largest_fp_component_area = largest_component_area(pred_mask)
+        else:
+            largest_fp_component_area = 0
 
         if is_defect_image:
             dice_value = dice_score(pred_mask, gt_mask)
             iou_value = iou_score(pred_mask, gt_mask)
-            component_recall, component_precision, component_f1 = component_metrics(pred_mask, gt_mask, tolerance_px=3)
-            boundary_f1 = boundary_f1_score(pred_mask, gt_mask, tolerance_px=3)
+            if include_expensive_metrics:
+                component_recall, component_precision, component_f1 = component_metrics(pred_mask, gt_mask, tolerance_px=3)
+                boundary_f1 = boundary_f1_score(pred_mask, gt_mask, tolerance_px=3)
+            else:
+                component_recall = 0.0
+                component_precision = 0.0
+                component_f1 = 0.0
+                boundary_f1 = 0.0
         else:
             dice_value = 0.0
             iou_value = 0.0
@@ -634,6 +652,7 @@ def search_postprocess_params(
                 threshold=threshold,
                 min_area=min_area,
                 include_auprc=False,
+                include_expensive_metrics=False,
             )
             result["pixel_auprc_all_labeled"] = pixel_auprc_all_labeled
             result["stage2_score"] = compute_stage2_score(
@@ -677,6 +696,24 @@ def search_postprocess_params(
 
             if compare_stage2_results(result, best_result, target_normal_fpr=target_normal_fpr):
                 best_result = result
+
+    if best_result is not None:
+        best_result = evaluate_prob_maps(
+            prob_maps=prob_maps,
+            gt_masks=gt_masks,
+            sample_types=sample_types,
+            image_names=image_names,
+            threshold=float(best_result["threshold"]),
+            min_area=int(best_result["min_area"]),
+            include_auprc=False,
+            include_expensive_metrics=True,
+        )
+        best_result["pixel_auprc_all_labeled"] = pixel_auprc_all_labeled
+        best_result["stage2_score"] = compute_stage2_score(
+            best_result,
+            target_normal_fpr=target_normal_fpr,
+            lambda_fpr_penalty=lambda_fpr_penalty,
+        )
 
     return {
         "best_result": best_result,

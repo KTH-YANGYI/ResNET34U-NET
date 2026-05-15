@@ -12,9 +12,16 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.datasets import ROIDataset, build_stage2_eval_transform
+from src.datasets import (
+    ROIDataset,
+    build_same_size_batch_sampler,
+    build_stage2_eval_transform,
+    resolve_stage2_image_size,
+    stage2_batch_size_by_image_size,
+    stage2_uses_native_size,
+)
 from src.model import build_model_from_config
-from src.samples import load_samples, split_samples_for_fold
+from src.samples import load_samples, split_samples
 from src.trainer import load_checkpoint, validate_stage2
 from src.utils import load_stage_config, read_csv_rows, save_json, write_csv_rows
 
@@ -22,7 +29,6 @@ from src.utils import load_stage_config, read_csv_rows, save_json, write_csv_row
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate best stage2 model on validation set")
     parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to config file")
-    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -33,31 +39,16 @@ def resolve_path(path_text):
     return path
 
 
-def apply_fold_overrides(cfg, fold):
-    cfg = dict(cfg)
-    cfg["fold"] = int(fold)
-
-    template_keys = [
-        ("defect_val_manifest_template", "defect_val_manifest"),
-        ("normal_val_manifest_template", "normal_val_manifest"),
-        ("save_dir_template", "save_dir"),
-        ("prototype_bank_path_template", "prototype_bank_path"),
-    ]
-
-    for template_key, target_key in template_keys:
-        if template_key in cfg:
-            cfg[target_key] = str(cfg[template_key]).format(fold=fold)
-
-    return cfg
-
-
 def build_threshold_grid(cfg):
+    if "eval_threshold_grid" in cfg:
+        return [float(item) for item in cfg["eval_threshold_grid"]]
+
     if "threshold_grid" in cfg:
         return [float(item) for item in cfg["threshold_grid"]]
 
-    start = float(cfg.get("threshold_grid_start", 0.10))
-    end = float(cfg.get("threshold_grid_end", 0.90))
-    step = float(cfg.get("threshold_grid_step", 0.02))
+    start = float(cfg.get("eval_threshold_grid_start", cfg.get("threshold_grid_start", 0.10)))
+    end = float(cfg.get("eval_threshold_grid_end", cfg.get("threshold_grid_end", 0.90)))
+    step = float(cfg.get("eval_threshold_grid_step", cfg.get("threshold_grid_step", 0.02)))
     if step <= 0:
         raise ValueError("threshold_grid_step must be positive")
 
@@ -75,15 +66,15 @@ def build_threshold_grid(cfg):
 
 
 def build_min_area_grid(cfg):
-    values = cfg.get("min_area_grid", [0, 8, 16, 24, 32, 48])
+    values = cfg.get("eval_min_area_grid", cfg.get("min_area_grid", [0, 8, 16, 24, 32, 48]))
     return [int(item) for item in values]
 
 
-def load_val_rows(cfg, fold):
+def load_val_rows(cfg):
     samples_path = str(cfg.get("samples_path", "")).strip()
     if samples_path != "":
         sample_rows = load_samples(samples_path, PROJECT_ROOT)
-        _, defect_val_rows, _, normal_val_rows = split_samples_for_fold(sample_rows, fold=fold)
+        _, defect_val_rows, _, normal_val_rows = split_samples(sample_rows)
         return defect_val_rows + normal_val_rows
 
     defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
@@ -91,12 +82,20 @@ def load_val_rows(cfg, fold):
     return defect_val_rows + normal_val_rows
 
 
-def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None):
+def eval_batch_size_by_image_size(cfg):
+    mapping = cfg.get("eval_batch_size_by_image_size", cfg.get("stage2_eval_batch_size_by_image_size", None))
+    if mapping is None:
+        return stage2_batch_size_by_image_size(cfg)
+
+    return {str(key).strip(): int(value) for key, value in dict(mapping).items()}
+
+
+def evaluate_and_save_stage2(cfg, checkpoint_path=None, progress_desc=None):
     device = torch.device("cuda" if torch.cuda.is_available() and str(cfg.get("device", "auto")).lower() != "cpu" else "cpu")
 
-    rows = load_val_rows(cfg, fold)
+    rows = load_val_rows(cfg)
 
-    image_size = int(cfg.get("image_size", 640))
+    image_size = resolve_stage2_image_size(cfg)
     batch_size = int(cfg.get("batch_size", 4))
     num_workers = int(cfg.get("num_workers", 0))
 
@@ -106,13 +105,29 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
 
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=device.type == "cuda",
-    )
+    if stage2_uses_native_size(cfg):
+        batch_sampler = build_same_size_batch_sampler(
+            rows=rows,
+            cfg=cfg,
+            default_batch_size=batch_size,
+            batch_size_by_image_size=eval_batch_size_by_image_size(cfg),
+            shuffle=False,
+            seed=int(cfg.get("seed", 42)),
+        )
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            pin_memory=device.type == "cuda",
+        )
+    else:
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=device.type == "cuda",
+        )
 
     model = build_model_from_config(cfg)
     model.to(device)
@@ -127,6 +142,7 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
     target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
     lambda_fpr_penalty = float(cfg.get("lambda_fpr_penalty", 2.0))
     raw_threshold = float(cfg.get("threshold", 0.5))
+    include_auprc = bool(cfg.get("eval_include_auprc", False))
 
     raw_result = validate_stage2(
         model=model,
@@ -137,7 +153,7 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
         progress_desc=None if progress_desc is None else f"{progress_desc} raw",
-        include_auprc=True,
+        include_auprc=include_auprc,
     )
 
     post_result = validate_stage2(
@@ -149,13 +165,12 @@ def evaluate_and_save_stage2(cfg, fold, checkpoint_path=None, progress_desc=None
         target_normal_fpr=target_normal_fpr,
         lambda_fpr_penalty=lambda_fpr_penalty,
         progress_desc=None if progress_desc is None else f"{progress_desc} post",
-        include_auprc=True,
+        include_auprc=include_auprc,
     )
 
     checkpoint_best = checkpoint.get("best_stage2_result", {})
 
     metrics_to_save = {
-        "fold": fold,
         "raw_defect_dice": float(raw_result["defect_dice"]),
         "raw_defect_iou": float(raw_result["defect_iou"]),
         "raw_defect_image_recall": float(raw_result["defect_image_recall"]),
@@ -285,9 +300,7 @@ def main():
     args = parse_args()
 
     cfg = load_stage_config(resolve_path(args.config), "stage2")
-    fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
-    cfg = apply_fold_overrides(cfg, fold)
-    metrics_to_save = evaluate_and_save_stage2(cfg=cfg, fold=fold)
+    metrics_to_save = evaluate_and_save_stage2(cfg=cfg)
     print(metrics_to_save)
 
 

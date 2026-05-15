@@ -7,7 +7,15 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from src.datasets import PatchDataset, ROIDataset, build_stage1_eval_transform, build_stage2_eval_transform
+from src.datasets import (
+    PatchDataset,
+    ROIDataset,
+    build_same_size_batch_sampler,
+    build_stage1_eval_transform,
+    build_stage2_eval_transform,
+    resolve_stage2_image_size,
+    stage2_uses_native_size,
+)
 from src.metrics import largest_component_area, logits_to_probs, probs_to_binary_mask
 from src.trainer import predict_on_loader
 from src.utils import save_json, seed_worker, write_csv_rows
@@ -49,7 +57,6 @@ STAGE2_HARD_NORMAL_FIELDNAMES = [
     "device",
     "defect_class",
     "holdout_reason",
-    "cv_fold",
     "split",
     "video_id",
     "video_name",
@@ -99,9 +106,20 @@ def _count_rows_by_field(rows, field_name):
     return dict(sorted(counter.items(), key=lambda item: item[0]))
 
 
-def _build_loader(dataset, batch_size, num_workers, device, seed):
+def _build_loader(dataset, batch_size, num_workers, device, seed, batch_sampler=None):
     generator = torch.Generator()
     generator.manual_seed(int(seed))
+
+    if batch_sampler is not None:
+        return DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=int(num_workers),
+            pin_memory=device.type == "cuda",
+            worker_init_fn=seed_worker if int(num_workers) > 0 else None,
+            generator=generator,
+            persistent_workers=int(num_workers) > 0,
+        )
 
     return DataLoader(
         dataset,
@@ -185,7 +203,7 @@ def build_stage1_replay_rows(
     if len(base_patch_rows) == 0:
         return [], {"total_count": 0, "count_by_type": {}, "count_by_source_family": {}}
 
-    batch_size = int(cfg.get("batch_size", 16))
+    batch_size = int(cfg.get("stage1_replay_batch_size", cfg.get("replay_batch_size", cfg.get("batch_size", 16))))
     num_workers = int(cfg.get("num_workers", 0))
     threshold = float(cfg.get("stage1_eval_threshold", 0.5))
     seed = int(cfg.get("seed", 42)) + int(source_epoch) + 10000
@@ -388,10 +406,10 @@ def build_hard_normal_pool(
     if len(normal_rows) == 0:
         return [], {"pool_size": 0, "count_by_device": {}, "top_score": 0.0}
 
-    batch_size = int(cfg.get("batch_size", 4))
+    batch_size = int(cfg.get("hard_normal_scan_batch_size", cfg.get("batch_size", 4)))
     num_workers = int(cfg.get("num_workers", 0))
     seed = int(cfg.get("seed", 42)) + int(source_epoch) + 20000
-    image_size = int(cfg.get("image_size", 640))
+    image_size = resolve_stage2_image_size(cfg)
     hard_ratio = float(cfg.get("stage2_hard_normal_ratio", 0.0))
     target_hard_count = resolve_hard_normal_count(defect_count, random_normal_count, cfg)
     pool_factor = float(cfg.get("hard_normal_pool_factor", 3.0))
@@ -405,7 +423,25 @@ def build_hard_normal_pool(
         image_size=image_size,
         transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
-    loader = _build_loader(dataset, batch_size=batch_size, num_workers=num_workers, device=device, seed=seed)
+    batch_sampler = None
+    if stage2_uses_native_size(cfg):
+        batch_size_by_image_size = cfg.get("hard_normal_batch_size_by_image_size", cfg.get("batch_size_by_image_size", {}))
+        batch_sampler = build_same_size_batch_sampler(
+            rows=normal_rows,
+            cfg=cfg,
+            default_batch_size=batch_size,
+            batch_size_by_image_size=batch_size_by_image_size,
+            shuffle=False,
+            seed=seed,
+        )
+    loader = _build_loader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        device=device,
+        seed=seed,
+        batch_sampler=batch_sampler,
+    )
     predictions = predict_on_loader(model, loader, device, progress_desc=f"Hard normal scan {source_epoch}")
     row_by_sample_id = {str(row.get("sample_id", "")).strip(): row for row in normal_rows}
 

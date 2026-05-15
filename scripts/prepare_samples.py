@@ -1,13 +1,9 @@
 import argparse
 import csv
 import json
-import random
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
-
-import numpy as np
-from PIL import Image, ImageDraw
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,12 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-DATASET_DIR_NAME = "dataset0505_crop640_roi"
-DEFAULT_DATASET_ROOT_CANDIDATES = [
-    PROJECT_ROOT.parent / DATASET_DIR_NAME,
-    PROJECT_ROOT / DATASET_DIR_NAME,
-]
-DEFAULT_MASK_DIR = PROJECT_ROOT / "generated_masks"
+DATASET_DIR_NAME = "dataset_crack_normal_unet_811"
+DEFAULT_DATASET_ROOT = PROJECT_ROOT.parent / DATASET_DIR_NAME
 DEFAULT_SAMPLES_PATH = PROJECT_ROOT / "manifests" / "samples.csv"
 DEFAULT_SUMMARY_PATH = PROJECT_ROOT / "manifests" / "samples_summary.json"
 
@@ -37,44 +29,19 @@ SAMPLE_FIELDNAMES = [
     "device",
     "defect_class",
     "holdout_reason",
-    "cv_fold",
     "split",
+    "video_id",
+    "video_name",
+    "frame_id",
 ]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Prepare lightweight sample manifest for ROI dataset")
-    parser.add_argument("--dataset-root", type=str, default=str(default_dataset_root()), help="ROI dataset root")
+    parser = argparse.ArgumentParser(description="Prepare sample manifest for the split crack/normal dataset")
+    parser.add_argument("--dataset-root", type=str, default=str(DEFAULT_DATASET_ROOT), help="Split dataset root")
     parser.add_argument("--samples-path", type=str, default=str(DEFAULT_SAMPLES_PATH), help="Output samples.csv path")
-    parser.add_argument("--mask-dir", type=str, default=str(DEFAULT_MASK_DIR), help="Generated mask output directory")
     parser.add_argument("--summary-path", type=str, default=str(DEFAULT_SUMMARY_PATH), help="Output summary JSON path")
-    parser.add_argument("--n-folds", type=int, default=4, help="Number of CV folds")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument(
-        "--test-ratio",
-        "--holdout-ratio",
-        dest="test_ratio",
-        type=float,
-        default=0.20,
-        help="Fraction of crack/normal samples reserved as inference-only holdout. Use 0 to disable.",
-    )
-    parser.add_argument(
-        "--test-seed",
-        "--holdout-seed",
-        dest="test_seed",
-        type=int,
-        default=2026,
-        help="Random seed for the inference-only holdout split.",
-    )
     return parser.parse_args()
-
-
-def default_dataset_root():
-    for candidate in DEFAULT_DATASET_ROOT_CANDIDATES:
-        if candidate.exists():
-            return candidate
-
-    return DEFAULT_DATASET_ROOT_CANDIDATES[0]
 
 
 def resolve_project_path(path_text):
@@ -84,12 +51,17 @@ def resolve_project_path(path_text):
     return PROJECT_ROOT / path
 
 
+def ensure_dir(path):
+    Path(path).mkdir(parents=True, exist_ok=True)
+
+
 def path_to_str(path):
     return str(Path(path).resolve())
 
 
-def ensure_dir(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
+def read_csv_rows(path):
+    with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 def write_csv_rows(path, rows, fieldnames):
@@ -108,177 +80,99 @@ def save_json(path, obj):
         json.dump(obj, handle, ensure_ascii=False, indent=2)
 
 
-def build_sample_id(device, defect_class, image_path):
-    return f"{device}_{defect_class}_{Path(image_path).stem}"
+def resolve_dataset_file(dataset_root, relative_value, absolute_value=""):
+    relative_text = str(relative_value or "").strip()
+    if relative_text != "":
+        return dataset_root / relative_text
+
+    absolute_text = str(absolute_value or "").strip()
+    if absolute_text != "":
+        return Path(absolute_text)
+
+    return None
 
 
-def polygon_mask_from_labelme(json_path, fallback_image_path):
-    with open(json_path, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
-
-    image_width = int(data.get("imageWidth") or 0)
-    image_height = int(data.get("imageHeight") or 0)
-
-    if image_width <= 0 or image_height <= 0:
-        with Image.open(fallback_image_path) as image:
-            image_width, image_height = image.size
-
-    mask = Image.new("L", (image_width, image_height), 0)
-    draw = ImageDraw.Draw(mask)
-
-    for shape in data.get("shapes", []):
-        points = shape.get("points", [])
-        if len(points) < 3:
-            continue
-        polygon = [(float(x), float(y)) for x, y in points]
-        draw.polygon(polygon, fill=255)
-
-    return mask
+def build_sample_id(split, source_dataset, label, image_path):
+    return f"{split}_{source_dataset}_{label}_{Path(image_path).stem}"
 
 
-def save_labelme_mask(json_path, image_path, output_path):
-    output_path = Path(output_path)
-    ensure_dir(output_path.parent)
-    mask = polygon_mask_from_labelme(json_path, image_path)
-    mask.save(output_path)
-    mask_np = np.array(mask)
-    return int((mask_np > 0).sum())
+def load_split_manifest(dataset_root):
+    manifest_path = dataset_root / "manifest.csv"
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Expected split dataset manifest: {manifest_path}")
 
+    source_rows = read_csv_rows(manifest_path)
+    if len(source_rows) == 0:
+        raise ValueError(f"Dataset manifest is empty: {manifest_path}")
 
-def assign_cv_folds(rows, n_folds, seed):
-    grouped = defaultdict(list)
-    for row in rows:
-        if row["split"] != "trainval":
-            row["cv_fold"] = ""
-            continue
-        key = (row["device"], row["sample_type"], row["defect_class"])
-        grouped[key].append(row)
-
-    rng = random.Random(seed)
-    for key in sorted(grouped.keys()):
-        key_rows = grouped[key]
-        rng.shuffle(key_rows)
-        for index, row in enumerate(key_rows):
-            row["cv_fold"] = int(index % n_folds)
-
-
-def assign_inference_holdout(rows, test_ratio, test_seed):
-    test_ratio = float(test_ratio)
-    if test_ratio < 0.0 or test_ratio >= 1.0:
-        raise ValueError("--test-ratio must be >= 0 and < 1")
-
-    summary = {
-        "enabled": test_ratio > 0.0,
-        "test_ratio": test_ratio,
-        "test_seed": int(test_seed),
-        "selected_count": 0,
-        "selected_by_device_class": {},
-    }
-
-    if test_ratio <= 0.0:
-        return summary
-
-    grouped = defaultdict(list)
-    for row in rows:
-        if row["split"] != "trainval":
-            continue
-        if row["sample_type"] not in {"defect", "normal"}:
-            continue
-
-        key = (row["device"], row["sample_type"], row["defect_class"])
-        grouped[key].append(row)
-
-    rng = random.Random(test_seed)
-    selected_counts = Counter()
-
-    for key in sorted(grouped.keys()):
-        key_rows = sorted(grouped[key], key=lambda row: row["sample_id"])
-        n_rows = len(key_rows)
-        if n_rows <= 1:
-            continue
-
-        rng.shuffle(key_rows)
-        holdout_count = int(round(n_rows * test_ratio))
-        holdout_count = max(1, holdout_count)
-        holdout_count = min(holdout_count, n_rows - 1)
-
-        for row in key_rows[:holdout_count]:
-            row["split"] = "holdout"
-            row["holdout_reason"] = "test_split"
-            row["cv_fold"] = ""
-            selected_counts[key] += 1
-
-    summary["selected_count"] = int(sum(selected_counts.values()))
-    summary["selected_by_device_class"] = {
-        "|".join(key): int(value)
-        for key, value in sorted(selected_counts.items(), key=lambda item: item[0])
-    }
-    return summary
-
-
-def scan_roi_dataset(dataset_root, mask_dir):
-    dataset_root = Path(dataset_root)
-    mask_dir = Path(mask_dir)
+    required = {"split", "label", "image_relative_path", "mask_relative_path"}
+    missing = required - set(source_rows[0].keys())
+    if missing:
+        raise ValueError(f"Dataset manifest is missing required column(s): {', '.join(sorted(missing))}")
 
     rows = []
-    mask_area_by_sample = {}
+    for source_row in source_rows:
+        split = str(source_row.get("split", "")).strip()
+        label = str(source_row.get("label", "")).strip()
+        if split not in {"train", "val", "test"}:
+            raise ValueError(f"Unsupported split `{split}` in {manifest_path}")
+        if label not in {"crack", "normal"}:
+            raise ValueError(f"Unsupported label `{label}` in {manifest_path}")
 
-    for device_dir in sorted(dataset_root.iterdir()):
-        if not device_dir.is_dir():
-            continue
-        device = device_dir.name
-        if device.startswith("."):
-            continue
+        image_path = resolve_dataset_file(
+            dataset_root,
+            source_row.get("image_relative_path", ""),
+            source_row.get("image_full_path", ""),
+        )
+        mask_path = resolve_dataset_file(
+            dataset_root,
+            source_row.get("mask_relative_path", ""),
+            source_row.get("mask_full_path", ""),
+        )
+        json_path = resolve_dataset_file(
+            dataset_root,
+            source_row.get("annotation_relative_path", ""),
+            source_row.get("annotation_full_path", ""),
+        )
+        if image_path is None or not image_path.exists():
+            raise FileNotFoundError(f"Missing image listed in manifest: {image_path}")
+        if mask_path is None or not mask_path.exists():
+            raise FileNotFoundError(f"Missing mask listed in manifest: {mask_path}")
 
-        for class_dir in sorted(device_dir.iterdir()):
-            if not class_dir.is_dir():
-                continue
-            defect_class = class_dir.name
-            if defect_class.startswith("."):
-                continue
+        source_dataset = str(source_row.get("source_dataset", "")).strip() or "unknown"
+        video_name = str(source_row.get("source_video_name", "")).strip()
+        video_id = Path(video_name).stem if video_name else ""
 
-            for image_path in sorted(class_dir.glob("*.png")):
-                json_path = image_path.with_suffix(".json")
-                sample_id = build_sample_id(device, defect_class, image_path)
-                mask_path = ""
-                is_labeled = False
-                sample_type = "normal" if defect_class == "normal" else "defect"
-                split = "trainval"
-                source_split = "trainval_pool"
-                holdout_reason = ""
+        rows.append(
+            {
+                "sample_id": build_sample_id(split, source_dataset, label, image_path),
+                "image_name": image_path.name,
+                "image_path": path_to_str(image_path),
+                "mask_path": path_to_str(mask_path),
+                "json_path": path_to_str(json_path) if json_path is not None and json_path.exists() else "",
+                "sample_type": "defect" if label == "crack" else "normal",
+                "is_labeled": str(label == "crack"),
+                "source_split": split,
+                "device": source_dataset,
+                "defect_class": label,
+                "holdout_reason": "test_split" if split == "test" else "",
+                "split": split,
+                "video_id": video_id,
+                "video_name": video_name,
+                "frame_id": str(source_row.get("source_frame", "")).strip(),
+            }
+        )
 
-                if defect_class == "crack":
-                    if not json_path.exists():
-                        raise FileNotFoundError(f"Missing LabelMe JSON for crack image: {image_path}")
-                    output_mask_path = mask_dir / device / defect_class / f"{image_path.stem}.png"
-                    mask_area_by_sample[sample_id] = save_labelme_mask(json_path, image_path, output_mask_path)
-                    mask_path = path_to_str(output_mask_path)
-                    is_labeled = True
-                elif defect_class == "broken":
-                    sample_type = "broken_unlabeled"
-                    split = "holdout"
-                    source_split = "broken_folder"
-                    holdout_reason = "broken_unlabeled"
-
-                rows.append(
-                    {
-                        "sample_id": sample_id,
-                        "image_name": image_path.name,
-                        "image_path": path_to_str(image_path),
-                        "mask_path": mask_path,
-                        "json_path": path_to_str(json_path) if json_path.exists() else "",
-                        "sample_type": sample_type,
-                        "is_labeled": str(bool(is_labeled)),
-                        "source_split": source_split,
-                        "device": device,
-                        "defect_class": defect_class,
-                        "holdout_reason": holdout_reason,
-                        "cv_fold": "",
-                        "split": split,
-                    }
-                )
-
-    return rows, mask_area_by_sample
+    split_order = {"train": 0, "val": 1, "test": 2}
+    return sorted(
+        rows,
+        key=lambda row: (
+            split_order[row["split"]],
+            row["device"],
+            row["defect_class"],
+            row["image_name"],
+        ),
+    )
 
 
 def count_by(rows, *keys):
@@ -286,38 +180,22 @@ def count_by(rows, *keys):
     return {"|".join(key): int(value) for key, value in sorted(counter.items())}
 
 
-def build_summary(rows, mask_area_by_sample, n_folds, seed, dataset_root, samples_path, mask_dir, holdout_summary):
-    fold_counts = Counter()
-    for row in rows:
-        if str(row.get("cv_fold", "")).strip() != "":
-            fold_counts[str(row["cv_fold"])] += 1
-
-    mask_areas = list(mask_area_by_sample.values())
-    if len(mask_areas) > 0:
-        mask_area_summary = {
-            "min": int(min(mask_areas)),
-            "median": float(np.median(mask_areas)),
-            "mean": float(np.mean(mask_areas)),
-            "max": int(max(mask_areas)),
-        }
-    else:
-        mask_area_summary = {"min": 0, "median": 0.0, "mean": 0.0, "max": 0}
-
+def build_summary(rows, dataset_root, samples_path):
+    test_rows = [row for row in rows if row["split"] == "test"]
     return {
         "dataset_root": path_to_str(dataset_root),
         "samples_path": path_to_str(samples_path),
-        "mask_dir": path_to_str(mask_dir),
-        "n_folds": int(n_folds),
-        "seed": int(seed),
-        "inference_holdout": holdout_summary,
+        "split_protocol": "explicit_train_val_test",
         "total_count": len(rows),
         "count_by_split": count_by(rows, "split"),
         "count_by_split_device_class": count_by(rows, "split", "device", "defect_class"),
         "count_by_device_class": count_by(rows, "device", "defect_class"),
         "count_by_sample_type": count_by(rows, "sample_type"),
-        "count_by_holdout_reason": count_by(rows, "holdout_reason"),
-        "fold_counts": dict(sorted(fold_counts.items(), key=lambda item: item[0])),
-        "mask_area_px": mask_area_summary,
+        "holdout": {
+            "source": "dataset_test_split",
+            "count": len(test_rows),
+            "count_by_device_class": count_by(test_rows, "device", "defect_class"),
+        },
     }
 
 
@@ -325,28 +203,14 @@ def main():
     args = parse_args()
     dataset_root = resolve_project_path(args.dataset_root)
     samples_path = resolve_project_path(args.samples_path)
-    mask_dir = resolve_project_path(args.mask_dir)
     summary_path = resolve_project_path(args.summary_path)
 
     if not dataset_root.exists():
         raise FileNotFoundError(f"Dataset root does not exist: {dataset_root}")
 
-    rows, mask_area_by_sample = scan_roi_dataset(dataset_root, mask_dir)
-    holdout_summary = assign_inference_holdout(rows, test_ratio=args.test_ratio, test_seed=args.test_seed)
-    assign_cv_folds(rows, n_folds=args.n_folds, seed=args.seed)
-    rows = sorted(rows, key=lambda row: (row["split"], row["device"], row["defect_class"], row["image_name"]))
-
+    rows = load_split_manifest(dataset_root)
     write_csv_rows(samples_path, rows, SAMPLE_FIELDNAMES)
-    summary = build_summary(
-        rows,
-        mask_area_by_sample,
-        args.n_folds,
-        args.seed,
-        dataset_root,
-        samples_path,
-        mask_dir,
-        holdout_summary,
-    )
+    summary = build_summary(rows, dataset_root, samples_path)
     save_json(summary_path, summary)
 
     print(
@@ -354,9 +218,9 @@ def main():
             "samples_path": path_to_str(samples_path),
             "summary_path": path_to_str(summary_path),
             "total_count": len(rows),
-            "trainval_count": sum(1 for row in rows if row["split"] == "trainval"),
-            "holdout_count": sum(1 for row in rows if row["split"] == "holdout"),
-            "test_split_holdout_count": holdout_summary["selected_count"],
+            "train_count": sum(1 for row in rows if row["split"] == "train"),
+            "val_count": sum(1 for row in rows if row["split"] == "val"),
+            "test_count": sum(1 for row in rows if row["split"] == "test"),
         }
     )
 

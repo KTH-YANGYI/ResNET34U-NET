@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 
 from src.losses import get_primary_logits
+from src.parallel import unwrap_model
 from src.utils import ensure_dir
 
 try:
@@ -238,8 +239,9 @@ def compute_binary_dice_from_logits(logits, target, threshold=0.5, eps=1e-6):
 
 def train_one_epoch(model, loader, criterion, optimizer, scaler, device, progress_desc=None):
     model.train()
-    if hasattr(model, "apply_encoder_freeze_mode"):
-        model.apply_encoder_freeze_mode()
+    base_model = unwrap_model(model)
+    if hasattr(base_model, "apply_encoder_freeze_mode"):
+        base_model.apply_encoder_freeze_mode()
 
     total_loss = 0.0
     total_samples = 0
@@ -284,6 +286,7 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, progres
 
     return {
         "loss": total_loss / total_samples,
+        "sample_count": int(total_samples),
         "lr_encoder": get_param_group_lr(optimizer, "encoder"),
         "lr_decoder": get_param_group_lr(optimizer, "decoder"),
     }

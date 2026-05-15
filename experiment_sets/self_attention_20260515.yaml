@@ -1,0 +1,48 @@
+name: self_attention_20260515
+status: planned
+canonical_baseline_config: configs/canonical_baseline.yaml
+description: >
+  New self-attention ablation derived from the canonical baseline. This set is
+  intentionally separate from the frozen 2026-05-11 four-experiment attention
+  set so the historical results remain immutable.
+
+reference_experiment_set: experiment_sets/attention_20260511.yaml
+
+run_policy:
+  run: single_train_val_test
+  compare_against: canonical_baseline
+
+fairness_policy:
+  fixed_samples_path: manifests/samples.csv
+  fixed_split_protocol: explicit_train_val_test
+  fixed_image_size: native
+  fixed_batch_size_policy: same_native_size_batches
+  fixed_epochs: 50
+  fixed_pos_weight: 12.0
+  fixed_loss: true
+  fixed_optimizer: true
+  fixed_augmentation: true
+  fixed_hard_normal_replay: true
+  only_architecture_may_change: true
+
+experiments:
+  - id: "04"
+    name: self_attention_d4d3
+    model_variant: selfattn_d4d3
+    config: configs/experiments/self_attention_d4d3.yaml
+    purpose: >
+      Test whether residual self-attention on decoder features improves global
+      context modeling beyond the canonical ResNet34-U-Net baseline and the
+      frozen skip-attention-gate experiment.
+    stage2_overrides:
+      model_name: resnet34_unet_selfattn_d4d3
+      model_variant: selfattn_d4d3
+      self_attention_levels: ["d4", "d3"]
+      self_attention_heads: 4
+      self_attention_dropout: 0.1
+      self_attention_sr_ratios:
+        d4: 2
+        d3: 4
+      self_attention_gamma_init: 0.0
+      stage1_load_strict: false
+      save_dir: outputs/experiments/self_attention_d4d3/stage2

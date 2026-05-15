@@ -5,7 +5,7 @@ from pathlib import Path
 import random
 
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +14,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.datasets import ROIDataset, build_stage2_eval_transform, build_stage2_train_transform
+from src.datasets import (
+    ROIDataset,
+    build_same_size_batch_sampler,
+    build_stage2_eval_transform,
+    build_stage2_train_transform,
+    resolve_stage2_image_size,
+    stage2_uses_native_size,
+)
 from src.losses import BCEDiceLoss
 from src.metrics import compare_stage2_results
 from src.mining import (
@@ -24,7 +31,20 @@ from src.mining import (
     save_stage2_hard_normal_outputs,
 )
 from src.model import build_model_from_config, collect_model_diagnostics
-from src.samples import load_samples, split_samples_for_fold
+from src.parallel import maybe_wrap_data_parallel, model_state_dict
+from src.parallel import (
+    barrier,
+    broadcast_object,
+    cleanup_distributed,
+    distributed_device,
+    init_distributed,
+    is_main_process,
+    local_batch_size,
+    local_batch_size_map,
+    maybe_wrap_ddp,
+    sync_train_stats,
+)
+from src.samples import load_samples, split_samples
 from src.trainer import EarlyStopper, build_amp_grad_scaler, build_optimizer, build_scheduler, load_checkpoint, load_compatible_checkpoint, save_checkpoint, train_one_epoch, validate_stage2
 from src.utils import ensure_dir, load_stage_config, read_csv_rows, save_json, seed_worker, set_seed, write_csv_rows
 from scripts.evaluate_val import evaluate_and_save_stage2
@@ -33,7 +53,6 @@ from scripts.evaluate_val import evaluate_and_save_stage2
 def parse_args():
     parser = argparse.ArgumentParser(description="Train stage2 full-image segmentation model")
     parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to config file")
-    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     return parser.parse_args()
 
 
@@ -44,37 +63,8 @@ def resolve_path(path_text):
     return path
 
 
-def build_device(cfg):
-    device_text = str(cfg.get("device", "auto")).strip().lower()
-
-    if device_text == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if device_text == "cuda" and not torch.cuda.is_available():
-        raise ValueError("CUDA was requested but is not available")
-
-    return torch.device(device_text)
-
-
-def apply_fold_overrides(cfg, fold):
-    cfg = dict(cfg)
-    cfg["fold"] = int(fold)
-
-    template_keys = [
-        ("defect_train_manifest_template", "defect_train_manifest"),
-        ("defect_val_manifest_template", "defect_val_manifest"),
-        ("normal_train_manifest_template", "normal_train_manifest"),
-        ("normal_val_manifest_template", "normal_val_manifest"),
-        ("stage1_checkpoint_template", "stage1_checkpoint"),
-        ("save_dir_template", "save_dir"),
-        ("prototype_bank_path_template", "prototype_bank_path"),
-    ]
-
-    for template_key, target_key in template_keys:
-        if template_key in cfg:
-            cfg[target_key] = str(cfg[template_key]).format(fold=fold)
-
-    return cfg
+def build_device(cfg, dist_context=None):
+    return distributed_device(cfg, dist_context or {})
 
 
 def build_scaler(cfg, device):
@@ -233,9 +223,9 @@ def build_epoch_train_rows(defect_train_rows, normal_train_rows, hard_normal_row
     }
 
 
-def build_stage2_train_loader(rows, cfg, device, seed=None):
-    image_size = int(cfg.get("image_size", 640))
-    batch_size = int(cfg.get("batch_size", 4))
+def build_stage2_train_loader(rows, cfg, device, seed=None, dist_context=None):
+    image_size = resolve_stage2_image_size(cfg)
+    batch_size = local_batch_size(int(cfg.get("batch_size", 4)), dist_context)
     num_workers = int(cfg.get("num_workers", 8))
     if seed is None:
         seed = int(cfg.get("seed", 42))
@@ -254,10 +244,48 @@ def build_stage2_train_loader(rows, cfg, device, seed=None):
     worker_init_fn = seed_worker if num_workers > 0 else None
     persistent_workers = num_workers > 0
 
+    if stage2_uses_native_size(cfg):
+        batch_size_map = local_batch_size_map(cfg.get("batch_size_by_image_size", {}), dist_context)
+        batch_sampler = build_same_size_batch_sampler(
+            rows=rows,
+            cfg=cfg,
+            default_batch_size=batch_size,
+            batch_size_by_image_size=batch_size_map,
+            shuffle=True,
+            seed=seed,
+            num_replicas=int(dist_context["world_size"]) if dist_context and dist_context.get("distributed", False) else 1,
+            rank=int(dist_context["rank"]) if dist_context and dist_context.get("distributed", False) else 0,
+        )
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            worker_init_fn=worker_init_fn,
+            generator=generator,
+            persistent_workers=persistent_workers,
+        )
+        loader.native_batch_summary = batch_sampler.summary()
+        return loader
+
+    sampler = None
+    shuffle = True
+    if dist_context is not None and dist_context.get("distributed", False):
+        sampler = DistributedSampler(
+            dataset,
+            num_replicas=int(dist_context["world_size"]),
+            rank=int(dist_context["rank"]),
+            shuffle=True,
+            seed=seed,
+            drop_last=False,
+        )
+        shuffle = False
+
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=shuffle,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         worker_init_fn=worker_init_fn,
@@ -266,13 +294,16 @@ def build_stage2_train_loader(rows, cfg, device, seed=None):
     )
 
 
-def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
-    image_size = int(cfg.get("image_size", 640))
-    batch_size = int(cfg.get("batch_size", 4))
+def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device, dist_context=None):
+    image_size = resolve_stage2_image_size(cfg)
+    batch_size = local_batch_size(int(cfg.get("batch_size", 4)), dist_context)
     num_workers = int(cfg.get("num_workers", 8))
     seed = int(cfg.get("seed", 42))
 
     rows = list(defect_val_rows) + list(normal_val_rows)
+
+    if not is_main_process(dist_context):
+        return None
 
     dataset = ROIDataset(
         rows,
@@ -286,6 +317,28 @@ def build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device):
     pin_memory = device.type == "cuda"
     worker_init_fn = seed_worker if num_workers > 0 else None
     persistent_workers = num_workers > 0
+
+    if stage2_uses_native_size(cfg):
+        batch_size_map = local_batch_size_map(cfg.get("batch_size_by_image_size", {}), dist_context)
+        batch_sampler = build_same_size_batch_sampler(
+            rows=rows,
+            cfg=cfg,
+            default_batch_size=batch_size,
+            batch_size_by_image_size=batch_size_map,
+            shuffle=False,
+            seed=seed,
+        )
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            worker_init_fn=worker_init_fn,
+            generator=generator,
+            persistent_workers=persistent_workers,
+        )
+        loader.native_batch_summary = batch_sampler.summary()
+        return loader
 
     return DataLoader(
         dataset,
@@ -327,11 +380,11 @@ def build_min_area_grid(cfg):
     return [int(item) for item in values]
 
 
-def load_stage2_rows(cfg, fold):
+def load_stage2_rows(cfg):
     samples_path = str(cfg.get("samples_path", "")).strip()
     if samples_path != "":
         sample_rows = load_samples(samples_path, PROJECT_ROOT)
-        return split_samples_for_fold(sample_rows, fold=fold)
+        return split_samples(sample_rows)
 
     defect_train_rows = read_csv_rows(resolve_path(cfg["defect_train_manifest"]))
     defect_val_rows = read_csv_rows(resolve_path(cfg["defect_val_manifest"]))
@@ -433,23 +486,25 @@ def main():
     args = parse_args()
 
     cfg = load_stage_config(resolve_path(args.config), "stage2")
-    fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
-    cfg = apply_fold_overrides(cfg, fold)
+    dist_context = init_distributed(cfg)
 
     set_seed(int(cfg.get("seed", 42)))
 
-    device = build_device(cfg)
+    device = build_device(cfg, dist_context)
 
-    defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = load_stage2_rows(cfg, fold)
+    defect_train_rows, defect_val_rows, normal_train_rows, normal_val_rows = load_stage2_rows(cfg)
 
-    val_loader = build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device)
+    val_loader = build_stage2_val_loader(defect_val_rows, normal_val_rows, cfg, device, dist_context=dist_context)
 
     model = build_model_from_config(cfg)
     model.to(device)
 
-    stage1_checkpoint_path = resolve_path(cfg["stage1_checkpoint"])
+    stage1_checkpoint_text = str(cfg.get("stage1_checkpoint", "")).strip()
+    stage1_checkpoint_path = resolve_path(stage1_checkpoint_text) if stage1_checkpoint_text != "" else None
     stage1_load_strict = bool(cfg.get("stage1_load_strict", True))
-    if stage1_load_strict:
+    if stage1_checkpoint_path is None:
+        print("stage1_checkpoint is empty; Stage2 will train without Stage1 weights.")
+    elif stage1_load_strict:
         load_checkpoint(stage1_checkpoint_path, model, map_location=device, strict=True)
     else:
         load_compatible_checkpoint(stage1_checkpoint_path, model, map_location=device)
@@ -465,10 +520,15 @@ def main():
         boundary_aux_weight=float(cfg.get("boundary_aux_weight", 0.0)),
         boundary_width=int(cfg.get("boundary_width", 3)),
     )
+    criterion.to(device)
 
     optimizer = build_optimizer(model, cfg)
     scheduler = build_scheduler(optimizer, cfg)
     scaler = build_scaler(cfg, device)
+    if dist_context.get("distributed", False):
+        model, parallel_summary = maybe_wrap_ddp(model, cfg, device, dist_context)
+    else:
+        model, parallel_summary = maybe_wrap_data_parallel(model, cfg, device)
 
     early_stopper = EarlyStopper(
         patience=int(cfg.get("early_stop_patience", 12)),
@@ -479,12 +539,17 @@ def main():
     epochs = int(cfg.get("epochs", 25))
     target_normal_fpr = float(cfg.get("target_normal_fpr", 0.10))
     lambda_fpr_penalty = float(cfg.get("lambda_fpr_penalty", 2.0))
+    train_eval_postprocess_search = bool(cfg.get("train_eval_postprocess_search", True))
     train_eval_threshold = float(cfg.get("train_eval_threshold", cfg.get("threshold", 0.50)))
     train_eval_min_area = int(cfg.get("train_eval_min_area", 0))
+    train_eval_threshold_values = build_threshold_grid(cfg) if train_eval_postprocess_search else None
+    train_eval_min_area_values = build_min_area_grid(cfg) if train_eval_postprocess_search else None
 
     save_dir = resolve_path(cfg["save_dir"])
-    ensure_dir(save_dir)
-    save_json(save_dir / "resolved_config.json", cfg)
+    if is_main_process(dist_context):
+        ensure_dir(save_dir)
+        save_json(save_dir / "resolved_config.json", cfg)
+    barrier(dist_context)
 
     best_ckpt_path = save_dir / "best_stage2.pt"
     last_ckpt_path = save_dir / "last_stage2.pt"
@@ -495,16 +560,25 @@ def main():
     hard_normal_rows = []
     hard_normal_summary = {"pool_size": 0, "count_by_device": {}, "top_score": 0.0}
 
-    print(f"fold = {fold}")
-    print(f"device = {device}")
-    print(f"stage1_checkpoint = {stage1_checkpoint_path}")
-    print(f"defect_train_count = {len(defect_train_rows)}")
-    print(f"defect_val_count = {len(defect_val_rows)}")
-    print(f"normal_train_count = {len(normal_train_rows)}")
-    print(f"normal_val_count = {len(normal_val_rows)}")
-    print(f"train_eval_threshold = {train_eval_threshold}")
-    print(f"train_eval_min_area = {train_eval_min_area}")
-    print(f"save_dir = {save_dir}")
+    if is_main_process(dist_context):
+        print(f"device = {device}")
+        print(f"parallel = {parallel_summary}")
+        print(f"stage1_checkpoint = {stage1_checkpoint_path if stage1_checkpoint_path is not None else '<none>'}")
+        print(f"defect_train_count = {len(defect_train_rows)}")
+        print(f"defect_val_count = {len(defect_val_rows)}")
+        print(f"normal_train_count = {len(normal_train_rows)}")
+        print(f"normal_val_count = {len(normal_val_rows)}")
+        print(f"stage2_native_size = {stage2_uses_native_size(cfg)}")
+        if hasattr(val_loader, "native_batch_summary"):
+            print(f"val_native_batch_summary = {json.dumps(val_loader.native_batch_summary, ensure_ascii=False)}")
+        print(f"train_eval_postprocess_search = {train_eval_postprocess_search}")
+        if train_eval_postprocess_search:
+            print(f"train_eval_threshold_values = {train_eval_threshold_values[0]}..{train_eval_threshold_values[-1]} ({len(train_eval_threshold_values)} values)")
+            print(f"train_eval_min_area_values = {train_eval_min_area_values}")
+        else:
+            print(f"train_eval_threshold = {train_eval_threshold}")
+            print(f"train_eval_min_area = {train_eval_min_area}")
+        print(f"save_dir = {save_dir}")
 
     training_failed = False
     try:
@@ -519,7 +593,9 @@ def main():
                 epoch_seed,
                 cfg,
             )
-            train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device, seed=epoch_seed)
+            train_loader = build_stage2_train_loader(epoch_train_rows, cfg, device, seed=epoch_seed, dist_context=dist_context)
+            if epoch == 1 and hasattr(train_loader, "native_batch_summary") and is_main_process(dist_context):
+                print(f"train_native_batch_summary = {json.dumps(train_loader.native_batch_summary, ensure_ascii=False)}")
 
             train_stats = train_one_epoch(
                 model,
@@ -530,27 +606,37 @@ def main():
                 device,
                 progress_desc=f"Train {epoch}/{epochs}",
             )
+            train_stats = sync_train_stats(train_stats, device, dist_context)
 
-            val_stats = validate_stage2(
-                model=model,
-                loader=val_loader,
-                device=device,
-                threshold=train_eval_threshold,
-                min_area=train_eval_min_area,
-                target_normal_fpr=target_normal_fpr,
-                lambda_fpr_penalty=lambda_fpr_penalty,
-                progress_desc=f"Val {epoch}/{epochs}",
-                amp_enabled=bool(cfg.get("amp", True)),
-            )
+            if is_main_process(dist_context):
+                val_stats = validate_stage2(
+                    model=model,
+                    loader=val_loader,
+                    device=device,
+                    threshold=train_eval_threshold,
+                    min_area=train_eval_min_area,
+                    threshold_values=train_eval_threshold_values,
+                    min_area_values=train_eval_min_area_values,
+                    target_normal_fpr=target_normal_fpr,
+                    lambda_fpr_penalty=lambda_fpr_penalty,
+                    progress_desc=f"Val {epoch}/{epochs}",
+                    amp_enabled=bool(cfg.get("amp", True)),
+                )
+            else:
+                val_stats = None
+            val_stats = broadcast_object(val_stats, dist_context)
 
             stage2_score = float(val_stats["stage2_score"])
             scheduler.step(stage2_score)
             should_stop, _ = early_stopper.step(stage2_score)
 
-            current_is_best = compare_stage2_results(
-                val_stats,
-                best_stage2_result,
-                target_normal_fpr=target_normal_fpr,
+            current_is_best = (
+                is_main_process(dist_context)
+                and compare_stage2_results(
+                    val_stats,
+                    best_stage2_result,
+                    target_normal_fpr=target_normal_fpr,
+                )
             )
 
             if current_is_best:
@@ -559,76 +645,77 @@ def main():
                     "hard_normal_summary": hard_normal_summary,
                 }
 
-            history_rows.append(
-                {
+            if is_main_process(dist_context):
+                history_rows.append(
+                    {
+                        "epoch": epoch,
+                        "train_loss": train_stats["loss"],
+                        "defect_dice": val_stats["defect_dice"],
+                        "defect_iou": val_stats["defect_iou"],
+                        "defect_image_recall": val_stats["defect_image_recall"],
+                        "normal_fpr": val_stats["normal_fpr"],
+                        "normal_count": val_stats["normal_count"],
+                        "normal_fp_count": val_stats["normal_fp_count"],
+                        "normal_fp_pixel_sum": val_stats["normal_fp_pixel_sum"],
+                        "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
+                        "normal_fp_pixel_median": val_stats["normal_fp_pixel_median"],
+                        "normal_fp_pixel_p95": val_stats["normal_fp_pixel_p95"],
+                        "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
+                        "normal_largest_fp_area_median": val_stats["normal_largest_fp_area_median"],
+                        "normal_largest_fp_area_p95": val_stats["normal_largest_fp_area_p95"],
+                        "normal_largest_fp_area_max": val_stats["normal_largest_fp_area_max"],
+                        "pixel_precision_defect_macro": val_stats["pixel_precision_defect_macro"],
+                        "pixel_recall_defect_macro": val_stats["pixel_recall_defect_macro"],
+                        "pixel_f1_defect_macro": val_stats["pixel_f1_defect_macro"],
+                        "pixel_precision_labeled_micro": val_stats["pixel_precision_labeled_micro"],
+                        "pixel_recall_labeled_micro": val_stats["pixel_recall_labeled_micro"],
+                        "pixel_f1_labeled_micro": val_stats["pixel_f1_labeled_micro"],
+                        "pixel_auprc_all_labeled": val_stats["pixel_auprc_all_labeled"],
+                        "component_recall_3px": val_stats["component_recall_3px"],
+                        "component_precision_3px": val_stats["component_precision_3px"],
+                        "component_f1_3px": val_stats["component_f1_3px"],
+                        "boundary_f1_3px": val_stats["boundary_f1_3px"],
+                        "threshold": val_stats["threshold"],
+                        "min_area": val_stats["min_area"],
+                        "stage2_score": val_stats["stage2_score"],
+                        "normal_budget_count": epoch_sampling_summary["normal_budget_count"],
+                        "requested_hard_normal_count": epoch_sampling_summary["requested_hard_normal_count"],
+                        "target_random_normal_count": epoch_sampling_summary["target_random_normal_count"],
+                        "target_hard_normal_count": epoch_sampling_summary["target_hard_normal_count"],
+                        "random_normal_count": epoch_sampling_summary["random_normal_count"],
+                        "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
+                        "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
+                        "hard_normal_max_repeats_per_epoch": epoch_sampling_summary["hard_normal_max_repeats_per_epoch"],
+                        "train_device_counts_json": json.dumps(epoch_sampling_summary["train_device_counts"], ensure_ascii=False, sort_keys=True),
+                        "lr_encoder": train_stats["lr_encoder"],
+                        "lr_decoder": train_stats["lr_decoder"],
+                    }
+                )
+                save_history_csv(history_path, history_rows)
+
+                checkpoint = {
                     "epoch": epoch,
-                    "train_loss": train_stats["loss"],
-                    "defect_dice": val_stats["defect_dice"],
-                    "defect_iou": val_stats["defect_iou"],
-                    "defect_image_recall": val_stats["defect_image_recall"],
-                    "normal_fpr": val_stats["normal_fpr"],
-                    "normal_count": val_stats["normal_count"],
-                    "normal_fp_count": val_stats["normal_fp_count"],
-                    "normal_fp_pixel_sum": val_stats["normal_fp_pixel_sum"],
-                    "normal_fp_pixel_mean": val_stats["normal_fp_pixel_mean"],
-                    "normal_fp_pixel_median": val_stats["normal_fp_pixel_median"],
-                    "normal_fp_pixel_p95": val_stats["normal_fp_pixel_p95"],
-                    "normal_largest_fp_area_mean": val_stats["normal_largest_fp_area_mean"],
-                    "normal_largest_fp_area_median": val_stats["normal_largest_fp_area_median"],
-                    "normal_largest_fp_area_p95": val_stats["normal_largest_fp_area_p95"],
-                    "normal_largest_fp_area_max": val_stats["normal_largest_fp_area_max"],
-                    "pixel_precision_defect_macro": val_stats["pixel_precision_defect_macro"],
-                    "pixel_recall_defect_macro": val_stats["pixel_recall_defect_macro"],
-                    "pixel_f1_defect_macro": val_stats["pixel_f1_defect_macro"],
-                    "pixel_precision_labeled_micro": val_stats["pixel_precision_labeled_micro"],
-                    "pixel_recall_labeled_micro": val_stats["pixel_recall_labeled_micro"],
-                    "pixel_f1_labeled_micro": val_stats["pixel_f1_labeled_micro"],
-                    "pixel_auprc_all_labeled": val_stats["pixel_auprc_all_labeled"],
-                    "component_recall_3px": val_stats["component_recall_3px"],
-                    "component_precision_3px": val_stats["component_precision_3px"],
-                    "component_f1_3px": val_stats["component_f1_3px"],
-                    "boundary_f1_3px": val_stats["boundary_f1_3px"],
-                    "threshold": val_stats["threshold"],
-                    "min_area": val_stats["min_area"],
-                    "stage2_score": val_stats["stage2_score"],
-                    "normal_budget_count": epoch_sampling_summary["normal_budget_count"],
-                    "requested_hard_normal_count": epoch_sampling_summary["requested_hard_normal_count"],
-                    "target_random_normal_count": epoch_sampling_summary["target_random_normal_count"],
-                    "target_hard_normal_count": epoch_sampling_summary["target_hard_normal_count"],
-                    "random_normal_count": epoch_sampling_summary["random_normal_count"],
-                    "hard_normal_count": epoch_sampling_summary["hard_normal_count"],
-                    "hard_pool_size": epoch_sampling_summary["hard_pool_size"],
-                    "hard_normal_max_repeats_per_epoch": epoch_sampling_summary["hard_normal_max_repeats_per_epoch"],
-                    "train_device_counts_json": json.dumps(epoch_sampling_summary["train_device_counts"], ensure_ascii=False, sort_keys=True),
-                    "lr_encoder": train_stats["lr_encoder"],
-                    "lr_decoder": train_stats["lr_decoder"],
+                    "config": cfg,
+                    "model_state_dict": model_state_dict(model),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "early_stopper_state_dict": early_stopper.state_dict(),
+                    "parallel_summary": parallel_summary,
+                    "best_stage2_result": best_stage2_result,
+                    "hard_normal_summary": hard_normal_summary,
+                    "current_val_stats": summarize_stage2_result(val_stats),
+                    "model_diagnostics": collect_model_diagnostics(model),
                 }
-            )
-            save_history_csv(history_path, history_rows)
 
-            checkpoint = {
-                "epoch": epoch,
-                "fold": fold,
-                "config": cfg,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "scheduler_state_dict": scheduler.state_dict(),
-                "early_stopper_state_dict": early_stopper.state_dict(),
-                "best_stage2_result": best_stage2_result,
-                "hard_normal_summary": hard_normal_summary,
-                "current_val_stats": summarize_stage2_result(val_stats),
-                "model_diagnostics": collect_model_diagnostics(model),
-            }
+                if scaler is not None:
+                    checkpoint["scaler_state_dict"] = scaler.state_dict()
 
-            if scaler is not None:
-                checkpoint["scaler_state_dict"] = scaler.state_dict()
+                save_checkpoint(last_ckpt_path, checkpoint)
 
-            save_checkpoint(last_ckpt_path, checkpoint)
+                if current_is_best:
+                    save_checkpoint(best_ckpt_path, checkpoint)
 
-            if current_is_best:
-                save_checkpoint(best_ckpt_path, checkpoint)
-
-            if should_refresh_hard_normal(epoch, cfg):
+            if should_refresh_hard_normal(epoch, cfg) and is_main_process(dist_context):
                 hard_normal_rows, hard_normal_summary = build_hard_normal_pool(
                     model=model,
                     normal_rows=normal_train_rows,
@@ -646,52 +733,58 @@ def main():
                     **hard_normal_summary,
                     "pool_size": len(hard_normal_rows),
                 }
+            hard_normal_rows, hard_normal_summary = broadcast_object((hard_normal_rows, hard_normal_summary), dist_context)
 
             if (
                 int(epoch_sampling_summary["hard_pool_size"]) > 0
                 and int(epoch_sampling_summary["target_hard_normal_count"]) > 0
                 and int(epoch_sampling_summary["hard_normal_count"]) == 0
+                and is_main_process(dist_context)
             ):
                 print(
                     "Warning: hard normal pool is non-empty but no hard normal rows were sampled for this epoch."
                 )
-            if int(epoch_sampling_summary["target_hard_normal_count"]) < int(epoch_sampling_summary["requested_hard_normal_count"]):
+            if (
+                int(epoch_sampling_summary["target_hard_normal_count"]) < int(epoch_sampling_summary["requested_hard_normal_count"])
+                and is_main_process(dist_context)
+            ):
                 print(
                     "Warning: hard normal target was capped by hard_normal_max_repeats_per_epoch "
                     f"({epoch_sampling_summary['target_hard_normal_count']}/"
                     f"{epoch_sampling_summary['requested_hard_normal_count']})."
                 )
 
-            print(
-                f"epoch {epoch}/{epochs} | "
-                f"random_normal={epoch_sampling_summary['random_normal_count']} | "
-                f"hard_normal={epoch_sampling_summary['hard_normal_count']}/{epoch_sampling_summary['requested_hard_normal_count']} | "
-                f"hard_pool={epoch_sampling_summary['hard_pool_size']} | "
-                f"train_loss={train_stats['loss']:.6f} | "
-                f"defect_dice={val_stats['defect_dice']:.6f} | "
-                f"defect_iou={val_stats['defect_iou']:.6f} | "
-                f"defect_recall={val_stats['defect_image_recall']:.6f} | "
-                f"normal_fpr={val_stats['normal_fpr']:.6f} | "
-                f"normal_fp={int(val_stats['normal_fp_count'])}/{int(val_stats['normal_count'])} | "
-                f"thr={val_stats['threshold']:.2f} | "
-                f"min_area={val_stats['min_area']} | "
-                f"stage2_score={val_stats['stage2_score']:.6f} | "
-                f"lr_encoder={train_stats['lr_encoder']:.6e} | "
-                f"lr_decoder={train_stats['lr_decoder']:.6e}"
-            )
+            if is_main_process(dist_context):
+                print(
+                    f"epoch {epoch}/{epochs} | "
+                    f"random_normal={epoch_sampling_summary['random_normal_count']} | "
+                    f"hard_normal={epoch_sampling_summary['hard_normal_count']}/{epoch_sampling_summary['requested_hard_normal_count']} | "
+                    f"hard_pool={epoch_sampling_summary['hard_pool_size']} | "
+                    f"train_loss={train_stats['loss']:.6f} | "
+                    f"defect_dice={val_stats['defect_dice']:.6f} | "
+                    f"defect_iou={val_stats['defect_iou']:.6f} | "
+                    f"defect_recall={val_stats['defect_image_recall']:.6f} | "
+                    f"normal_fpr={val_stats['normal_fpr']:.6f} | "
+                    f"normal_fp={int(val_stats['normal_fp_count'])}/{int(val_stats['normal_count'])} | "
+                    f"thr={val_stats['threshold']:.2f} | "
+                    f"min_area={val_stats['min_area']} | "
+                    f"stage2_score={val_stats['stage2_score']:.6f} | "
+                    f"lr_encoder={train_stats['lr_encoder']:.6e} | "
+                    f"lr_decoder={train_stats['lr_decoder']:.6e}"
+                )
 
             if should_stop:
-                print("early stopping triggered, stage2 stopped early.")
+                if is_main_process(dist_context):
+                    print("early stopping triggered, stage2 stopped early.")
                 break
     except Exception:
         training_failed = True
         raise
     finally:
-        if bool(cfg.get("auto_evaluate_after_train", True)) and best_ckpt_path.exists():
+        if is_main_process(dist_context) and bool(cfg.get("auto_evaluate_after_train", True)) and best_ckpt_path.exists():
             try:
                 evaluate_and_save_stage2(
                     cfg=cfg,
-                    fold=fold,
                     checkpoint_path=best_ckpt_path,
                     progress_desc="Auto eval",
                 )
@@ -700,8 +793,10 @@ def main():
                 if bool(cfg.get("auto_evaluate_strict", False)) and not training_failed:
                     raise
                 print(f"Warning: automatic validation export failed. Detail: {exc}")
+        cleanup_distributed(dist_context)
 
-    print("stage2 training finished.")
+    if is_main_process(dist_context):
+        print("stage2 training finished.")
 
 
 if __name__ == "__main__":

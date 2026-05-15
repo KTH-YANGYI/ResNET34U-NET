@@ -1,0 +1,10 @@
+Project: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage
+Dataset: ../dataset_crack_normal_unet_811
+Scope:   phase1
+Baseline profile: full
+GPUs:    0,1,2,3
+Plan:    outputs/experiments/811_fixed_split
+Run dir: outputs/experiments/811_fixed_split/phase1_baseline_selection
+[2026-05-15 05:09:41] start check_environment
+[2026-05-15 05:09:41] fail  check_environment | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/check_environment.log
+scripts/run_811_experiment_plan.sh: line 115: python: command not found

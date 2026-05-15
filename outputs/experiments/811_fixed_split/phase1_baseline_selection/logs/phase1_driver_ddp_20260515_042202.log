@@ -1,0 +1,16 @@
+Project: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage
+Dataset: ../dataset_crack_normal_unet_811
+Scope:   phase1
+Baseline profile: full
+GPUs:    0,1,2,3
+Plan:    outputs/experiments/811_fixed_split
+Run dir: outputs/experiments/811_fixed_split/phase1_baseline_selection
+[2026-05-15 04:22:05] start check_environment
+[2026-05-15 04:22:12] done  check_environment | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/check_environment.log
+[2026-05-15 04:22:12] start prepare_samples
+[2026-05-15 04:22:14] done  prepare_samples | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/prepare_samples.log
+[2026-05-15 04:22:14] start build_patch_index
+[2026-05-15 04:22:53] done  build_patch_index | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/build_patch_index.log
+[2026-05-15 04:22:53] start stage1_s20260515
+[2026-05-15 04:53:54] done  stage1_s20260515 | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/stage1_s20260515.log
+[2026-05-15 04:53:55] start 811_m0_baseline_s20260515

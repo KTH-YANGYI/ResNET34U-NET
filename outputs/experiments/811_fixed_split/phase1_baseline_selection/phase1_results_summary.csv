@@ -1,0 +1,5 @@
+run,description,val_stage2_score,val_defect_dice,val_defect_iou,val_normal_fpr,val_threshold,val_min_area,holdout_labeled_count,holdout_defect_dice,holdout_defect_iou,holdout_normal_fpr,holdout_threshold,holdout_min_area,notes
+811_m0_baseline_s20260515,canonical baseline,0.3161797067,0.5279444126,0.4222347012,0.2058823529,0.95,48,45,0.4826400197,0.3850681550,0.0,0.95,48,best validation score; recommended phase2 baseline
+811_t1_no_stage1_s20260515,no stage1 initialization,-0.9606008948,0.3688108699,0.2691908905,0.7647058824,0.95,48,45,0.4118559478,0.3046676209,0.0,0.95,48,stage1 is important
+811_t2_no_hard_normal_s20260515,no hard normal mining,0.2315069355,0.3844481120,0.2947969000,0.1764705882,0.95,48,45,0.3850447434,0.3026146991,0.0,0.95,48,hard normal mining helps validation score
+811_t3_normal_fp_loss_s20260515,normal false-positive loss,0.3057366780,0.3998543250,0.3021283248,0.1470588235,0.95,48,45,0.4015248056,0.3009423220,0.0,0.95,48,close to baseline but does not beat M0

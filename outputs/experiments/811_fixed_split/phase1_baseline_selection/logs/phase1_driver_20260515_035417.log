@@ -1,0 +1,21 @@
+Project: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage
+Dataset: ../dataset_crack_normal_unet_811
+Scope:   phase1
+Baseline profile: full
+GPUs:    0,1,2,3
+Plan:    outputs/experiments/811_fixed_split
+Run dir: outputs/experiments/811_fixed_split/phase1_baseline_selection
+[2026-05-15 03:54:21] start check_environment
+[2026-05-15 03:54:28] done  check_environment | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/check_environment.log
+[2026-05-15 03:54:28] start prepare_samples
+[2026-05-15 03:54:30] done  prepare_samples | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/prepare_samples.log
+[2026-05-15 03:54:30] start build_patch_index
+[2026-05-15 03:55:09] done  build_patch_index | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/build_patch_index.log
+[2026-05-15 03:55:10] start stage1_s20260515
+scripts/run_811_experiment_plan.sh: line 109: 3058319 Terminated              "$@" > "$log_path" 2>&1
+[2026-05-15 03:56:35] fail  stage1_s20260515 | log: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/logs/stage1_s20260515.log
+device = cuda
+parallel = {'data_parallel': True, 'requested': True, 'device_type': 'cuda', 'available_cuda_devices': 4, 'device_ids': [0, 1, 2, 3], 'output_device': 0}
+base_train_patch_count = 4169
+val_patch_count = 508
+save_dir = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/stage1_s20260515/stage1

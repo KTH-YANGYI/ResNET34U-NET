@@ -15,15 +15,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from scripts.evaluate_val import apply_fold_overrides, load_val_rows
+from scripts.evaluate_val import load_val_rows
 from src.datasets import (
     ROIDataset,
+    build_same_size_batch_sampler,
     build_empty_mask,
     build_stage2_eval_transform,
     read_image_rgb,
     read_mask_binary,
+    resolve_stage2_image_size,
     resize_image,
     resize_mask,
+    stage2_uses_native_size,
 )
 from src.metrics import dice_score, iou_score, largest_component_area, logits_to_probs, probs_to_binary_mask
 from src.model import build_model_from_config
@@ -34,7 +37,6 @@ from src.utils import ensure_dir, load_stage_config, read_json, write_csv_rows
 def parse_args():
     parser = argparse.ArgumentParser(description="Render validation error-analysis overlays for a Stage2 checkpoint")
     parser.add_argument("--config", type=str, default="configs/canonical_baseline.yaml", help="Path to stage2 config")
-    parser.add_argument("--fold", type=int, default=None, help="Override fold in config")
     parser.add_argument("--checkpoint", type=str, default=None, help="Checkpoint path. Defaults to best_stage2.pt")
     parser.add_argument("--output-dir", type=str, default=None, help="Output directory. Defaults to save_dir/error_analysis")
     parser.add_argument("--threshold", type=float, default=None, help="Override postprocess threshold")
@@ -202,8 +204,6 @@ def write_summary(path, rows):
 def main():
     args = parse_args()
     cfg = load_stage_config(resolve_path(args.config), "stage2")
-    fold = int(args.fold if args.fold is not None else cfg.get("fold", 0))
-    cfg = apply_fold_overrides(cfg, fold)
 
     save_dir = resolve_path(cfg["save_dir"])
     checkpoint_path = resolve_path(args.checkpoint) if args.checkpoint is not None else save_dir / "best_stage2.pt"
@@ -219,8 +219,8 @@ def main():
     )
 
     device = build_device(cfg)
-    rows = load_val_rows(cfg, fold)
-    image_size = int(cfg.get("image_size", 640))
+    rows = load_val_rows(cfg)
+    image_size = resolve_stage2_image_size(cfg)
     batch_size = int(cfg.get("batch_size", 4))
     num_workers = int(cfg.get("num_workers", 0))
 
@@ -229,13 +229,28 @@ def main():
         image_size=image_size,
         transform=build_stage2_eval_transform(image_size, cfg=cfg),
     )
-    loader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=device.type == "cuda",
-    )
+    if stage2_uses_native_size(cfg):
+        batch_sampler = build_same_size_batch_sampler(
+            rows=rows,
+            cfg=cfg,
+            default_batch_size=batch_size,
+            shuffle=False,
+            seed=int(cfg.get("seed", 42)),
+        )
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=num_workers,
+            pin_memory=device.type == "cuda",
+        )
+    else:
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=device.type == "cuda",
+        )
 
     model = build_model_from_config(cfg)
     model.to(device)
@@ -261,10 +276,12 @@ def main():
         if row is None:
             continue
 
-        image = resize_image(read_image_rgb(row["image_path"]), image_size)
+        raw_image = read_image_rgb(row["image_path"])
+        image = raw_image if image_size is None else resize_image(raw_image, image_size)
         mask_path = str(row.get("mask_path", "")).strip()
         if mask_path:
-            gt_mask = resize_mask(read_mask_binary(mask_path), image_size)
+            raw_mask = read_mask_binary(mask_path)
+            gt_mask = raw_mask if image_size is None else resize_mask(raw_mask, image_size)
         else:
             gt_mask = build_empty_mask(image.shape[0], image.shape[1])
 
@@ -357,7 +374,6 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=["key", "value"])
         writer.writeheader()
         writer.writerow({"key": "config", "value": args.config})
-        writer.writerow({"key": "fold", "value": fold})
         writer.writerow({"key": "checkpoint", "value": str(checkpoint_path)})
         writer.writerow({"key": "threshold", "value": threshold})
         writer.writerow({"key": "min_area", "value": min_area})
@@ -366,7 +382,6 @@ def main():
 
     print(
         {
-            "fold": fold,
             "threshold": threshold,
             "min_area": min_area,
             "postprocess_source": postprocess_source,

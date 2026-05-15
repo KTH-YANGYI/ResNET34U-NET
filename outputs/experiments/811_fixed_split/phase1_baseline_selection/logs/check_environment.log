@@ -1,0 +1,24 @@
+System
+  python: 3.11.3 (main, Jan 26 2024, 21:22:48) [GCC 12.3.0]
+  executable: /apps/Arch/software/Python/3.11.3-GCCcore-12.3.0/bin/python
+  platform: Linux-4.18.0-553.109.1.el8_10.x86_64-x86_64-with-glibc2.28
+  hostname: alvis3-03
+  CUDA_VISIBLE_DEVICES: 
+  SLURM_JOB_ID: 6634271
+Required Python modules
+  [OK] torch (PyTorch) 2.1.2
+  [OK] torchvision (torchvision) 0.16.2
+  [OK] numpy (NumPy) 1.25.1
+  [OK] PIL (Pillow) 9.5.0
+  [OK] yaml (PyYAML) 6.0
+Optional Python modules
+  [OK] tqdm (tqdm, optional progress bars) 4.66.1
+  [OK] scipy (SciPy, faster connected components) 1.11.1
+CUDA
+  available: True
+  device_count: 4
+  device 0: NVIDIA A100-SXM4-40GB
+  device 1: NVIDIA A100-SXM4-40GB
+  device 2: NVIDIA A100-SXM4-40GB
+  device 3: NVIDIA A100-SXM4-40GB
+Environment check finished.

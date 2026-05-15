@@ -1,0 +1,29 @@
+extends: ../canonical_baseline.yaml
+name: prototype_cross_attention
+version: "2026-05-15"
+canonical: false
+description: >
+  Prototype cross-attention experiment derived from the canonical two-stage
+  baseline. This variant keeps the canonical Stage1 checkpoint, builds a
+  positive/hard-negative prototype bank from Stage1 patch features, and trains
+  Stage2 with bottleneck tokens cross-attending to those prototypes.
+
+stage2:
+  model_name: resnet34_unet_tbn_d1_hnproto
+  model_variant: tbn_d1_hnproto
+
+  transformer_bottleneck_layers: 1
+  transformer_bottleneck_heads: 8
+  transformer_bottleneck_dropout: 0.1
+
+  prototype_bank_path: outputs/experiments/prototype_cross_attention/prototype_bank.pt
+  prototype_attention_heads: 8
+  prototype_attention_dropout: 0.1
+  prototype_pos_max: 128
+  prototype_neg_max: 128
+  prototype_l2_normalize: true
+  prototype_batch_size: 64
+
+  stage1_load_strict: false
+  stage1_checkpoint: outputs/experiments/canonical_baseline/stage1/best_stage1.pt
+  save_dir: outputs/experiments/prototype_cross_attention/stage2

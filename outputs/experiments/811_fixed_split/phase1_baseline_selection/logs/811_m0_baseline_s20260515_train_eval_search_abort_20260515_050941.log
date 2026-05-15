@@ -1,0 +1,53 @@
+master_addr is only used for static rdzv_backend and when rdzv_endpoint is not specified.
+WARNING:__main__:
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+device = cuda:0
+parallel = {'ddp': True, 'requested': True, 'device_type': 'cuda', 'rank': 0, 'local_rank': 0, 'world_size': 4, 'backend': 'nccl', 'find_unused_parameters': False}
+stage1_checkpoint = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/stage1_s20260515/stage1/best_stage1.pt
+defect_train_count = 371
+defect_val_count = 47
+normal_train_count = 274
+normal_val_count = 34
+stage2_native_size = True
+val_native_batch_summary = [{"image_size": "3840x2160", "count": 47, "batch_size": 4, "rank": 0, "num_replicas": 1}, {"image_size": "640x640", "count": 34, "batch_size": 80, "rank": 0, "num_replicas": 1}]
+train_eval_postprocess_search = True
+train_eval_threshold_values = 0.1..0.95 (44 values)
+train_eval_min_area_values = [0, 8, 16, 24, 32, 48]
+save_dir = /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase1_baseline_selection/811_m0_baseline_s20260515/stage2
+train_native_batch_summary = [{"image_size": "3840x2160", "count": 94, "batch_size": 4, "rank": 0, "num_replicas": 4}, {"image_size": "640x640", "count": 68, "batch_size": 80, "rank": 0, "num_replicas": 4}]
+[2026-05-15 05:10:23,860] torch.distributed.elastic.agent.server.api: [WARNING] Received 15 death signal, shutting down workers
+[2026-05-15 05:10:23,860] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3093196 closing signal SIGTERM
+[2026-05-15 05:10:23,860] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3093197 closing signal SIGTERM
+[2026-05-15 05:10:23,860] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3093198 closing signal SIGTERM
+[2026-05-15 05:10:23,860] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 3093199 closing signal SIGTERM
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 810, in <module>
+    main()
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 255, in launch_agent
+    result = agent.run()
+             ^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/metrics/api.py", line 124, in wrapper
+    result = f(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/agent/server/api.py", line 736, in run
+    result = self._invoke_run(role)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/agent/server/api.py", line 877, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 62, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3093192 got signal: 15

@@ -39,7 +39,6 @@ NEGATIVE_PATCH_TYPES = {
 def parse_args():
     parser = argparse.ArgumentParser(description="Build a Stage1 hard-negative prototype bank")
     parser.add_argument("--config", type=str, required=True)
-    parser.add_argument("--fold", type=int, required=True)
     return parser.parse_args()
 
 
@@ -48,26 +47,6 @@ def resolve_path(path_text):
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path
-
-
-def apply_fold_overrides(cfg, fold):
-    cfg = dict(cfg)
-    cfg["fold"] = int(fold)
-    for template_key, target_key in [
-        ("stage1_checkpoint_template", "stage1_checkpoint"),
-        ("prototype_bank_path_template", "prototype_bank_path"),
-    ]:
-        if template_key in cfg:
-            cfg[target_key] = str(cfg[template_key]).format(fold=fold)
-    return cfg
-
-
-def apply_stage1_fold_overrides(cfg, fold):
-    cfg = dict(cfg)
-    cfg["fold"] = int(fold)
-    if "train_index_path_template" in cfg:
-        cfg["train_index_path"] = str(cfg["train_index_path_template"]).format(fold=fold)
-    return cfg
 
 
 def is_positive_patch(row):
@@ -153,13 +132,11 @@ def extract_features(model, rows, cfg, device):
 
 def main():
     args = parse_args()
-    cfg = apply_fold_overrides(load_stage_config(resolve_path(args.config), "stage2"), args.fold)
-    stage1_cfg = apply_stage1_fold_overrides(load_stage_config(resolve_path(args.config), "stage1"), args.fold)
-    seed = int(cfg.get("seed", 42)) + int(args.fold)
+    cfg = load_stage_config(resolve_path(args.config), "stage2")
+    stage1_cfg = load_stage_config(resolve_path(args.config), "stage1")
+    seed = int(cfg.get("seed", 42))
 
-    manifest_path = resolve_path(
-        stage1_cfg.get("train_index_path", f"manifests/stage1_fold{int(args.fold)}_train_index.csv")
-    )
+    manifest_path = resolve_path(stage1_cfg["train_index_path"])
     rows = read_csv_rows(manifest_path)
     all_pos_rows = [row for row in rows if is_positive_patch(row)]
     all_neg_rows = [row for row in rows if is_negative_patch(row)]
@@ -188,13 +165,12 @@ def main():
         pos_prototypes = F.normalize(pos_prototypes, dim=1)
         neg_prototypes = F.normalize(neg_prototypes, dim=1)
 
-    output_path = resolve_path(cfg.get("prototype_bank_path", f"outputs/prototype_banks/fold{int(args.fold)}/prototype_bank.pt"))
+    output_path = resolve_path(cfg.get("prototype_bank_path", "outputs/prototype_banks/prototype_bank.pt"))
     ensure_dir(output_path.parent)
     bank = {
         "pos_prototypes": pos_prototypes,
         "neg_prototypes": neg_prototypes,
         "meta": {
-            "fold": int(args.fold),
             "stage1_checkpoint": str(resolve_path(cfg["stage1_checkpoint"])),
             "manifest_path": str(manifest_path),
             "num_pos_rows_before_limit": len(all_pos_rows),
