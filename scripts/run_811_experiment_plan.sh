@@ -111,13 +111,31 @@ run_logged() {
   shift
 
   local log_path="$LOG_DIR/${name}.log"
+  local monitor_path="$LOG_DIR/${name}_gpu.csv"
+  local monitor_pid=""
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi --query-gpu=timestamp,index,name,memory.used,memory.total,utilization.gpu \
+      --format=csv,noheader,nounits -l 30 > "$monitor_path" 2>/dev/null &
+    monitor_pid="$!"
+  fi
+
   echo "[$(date '+%F %T')] start ${name}"
   if "$@" > "$log_path" 2>&1; then
+    if [[ -n "$monitor_pid" ]]; then
+      kill "$monitor_pid" 2>/dev/null || true
+      wait "$monitor_pid" 2>/dev/null || true
+    fi
     echo "[$(date '+%F %T')] done  ${name} | log: ${log_path}"
   else
+    local status="$?"
+    if [[ -n "$monitor_pid" ]]; then
+      kill "$monitor_pid" 2>/dev/null || true
+      wait "$monitor_pid" 2>/dev/null || true
+    fi
     echo "[$(date '+%F %T')] fail  ${name} | log: ${log_path}" >&2
     tail -n 120 "$log_path" >&2 || true
-    exit 1
+    exit "$status"
   fi
 }
 
@@ -273,6 +291,11 @@ stage2:
   model_variant: $model_variant
   stage1_checkpoint: "$checkpoint"
   stage1_load_strict: $strict
+  auto_evaluate_after_train: false
+  auto_evaluate_strict: false
+  eval_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 1
   save_dir: $RUN_ROOT_REL/$run_name/stage2
 EOF
 
@@ -307,6 +330,11 @@ stage2:
   stage1_load_strict: false
   pretrained: true
   allow_pretrained_fallback: false
+  auto_evaluate_after_train: false
+  auto_evaluate_strict: false
+  eval_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 1
   save_dir: $RUN_ROOT_REL/$run_name/stage2
 EOF
 }
@@ -338,6 +366,13 @@ run_stage2() {
       run_train scripts/train_stage2.py --config "$config_path"
   fi
 
+  if [[ -f "$PROJECT_DIR/$RUN_ROOT_REL/$run_name/stage2/val_metrics.json" ]]; then
+    echo "[$(date '+%F %T')] skip  ${run_name}_val | metrics exist"
+  else
+    run_logged "${run_name}_val" \
+      env CUDA_VISIBLE_DEVICES="$GPU_DEVICES" "$PYTHON_BIN" scripts/evaluate_val.py --config "$config_path"
+  fi
+
   if [[ "$WITH_HOLDOUT" -eq 1 ]]; then
     if [[ -f "$PROJECT_DIR/$RUN_ROOT_REL/$run_name/stage2/holdout/holdout_metrics.json" ]]; then
       echo "[$(date '+%F %T')] skip  ${run_name}_holdout | metrics exist"
@@ -345,6 +380,21 @@ run_stage2() {
       run_logged "${run_name}_holdout" \
         env CUDA_VISIBLE_DEVICES="$GPU_DEVICES" "$PYTHON_BIN" scripts/infer_holdout.py --config "$config_path"
     fi
+  fi
+
+  write_summary
+}
+
+write_summary() {
+  local summary_log="$LOG_DIR/summarize_results.log"
+  if "$PYTHON_BIN" scripts/summarize_experiment_results.py \
+    --run-root "$RUN_ROOT_REL" \
+    --scope "$SCOPE" \
+    --baseline-profile "$BASELINE_PROFILE" > "$summary_log" 2>&1; then
+    echo "[$(date '+%F %T')] summary updated | log: ${summary_log}"
+  else
+    echo "[$(date '+%F %T')] warn  summary update failed | log: ${summary_log}" >&2
+    tail -n 80 "$summary_log" >&2 || true
   fi
 }
 
