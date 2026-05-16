@@ -1,0 +1,2 @@
+train_total=4169 (pos=2201, near_miss=395, hard_neg=589, normal_neg=984), val_total=508 (pos=280, near_miss=45, hard_neg=69, normal_neg=114)
+build_patch_index finished, summary was written to /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/manifests/stage1_patch_summary.json.

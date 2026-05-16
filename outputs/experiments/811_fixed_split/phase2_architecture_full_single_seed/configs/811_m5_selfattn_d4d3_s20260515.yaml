@@ -1,0 +1,32 @@
+extends: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/configs/canonical_baseline.yaml
+name: 811_m5_selfattn_d4d3_s20260515
+version: "2026-05-15"
+canonical: false
+
+common:
+  seed: 20260515
+
+stage1:
+  save_dir: outputs/experiments/811_fixed_split/stage1_s20260515/stage1
+
+stage2:
+  model_name: 811_m5_selfattn_d4d3
+  model_variant: selfattn_d4d3
+  stage1_checkpoint: "outputs/experiments/811_fixed_split/stage1_s20260515/stage1/best_stage1.pt"
+  stage1_load_strict: false
+  auto_evaluate_after_train: false
+  auto_evaluate_strict: false
+  batch_size_by_image_size:
+    640x640: 320
+    3840x2160: 16
+  eval_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 1
+  save_dir: outputs/experiments/811_fixed_split/phase2_architecture_full_single_seed/811_m5_selfattn_d4d3_s20260515/stage2
+  self_attention_levels: ["d4", "d3"]
+  self_attention_heads: 4
+  self_attention_dropout: 0.1
+  self_attention_sr_ratios:
+    d4: 2
+    d3: 4
+  self_attention_gamma_init: 0.0

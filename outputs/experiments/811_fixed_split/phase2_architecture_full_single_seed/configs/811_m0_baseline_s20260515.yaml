@@ -1,0 +1,25 @@
+extends: /mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/configs/canonical_baseline.yaml
+name: 811_m0_baseline_s20260515
+version: "2026-05-15"
+canonical: false
+
+common:
+  seed: 20260515
+
+stage1:
+  save_dir: outputs/experiments/811_fixed_split/stage1_s20260515/stage1
+
+stage2:
+  model_name: 811_m0_baseline
+  model_variant: resnet34_unet_baseline
+  stage1_checkpoint: "outputs/experiments/811_fixed_split/stage1_s20260515/stage1/best_stage1.pt"
+  stage1_load_strict: true
+  auto_evaluate_after_train: false
+  auto_evaluate_strict: false
+  batch_size_by_image_size:
+    640x640: 320
+    3840x2160: 16
+  eval_batch_size_by_image_size:
+    640x640: 80
+    3840x2160: 1
+  save_dir: outputs/experiments/811_fixed_split/phase2_architecture_full_single_seed/811_m0_baseline_s20260515/stage2

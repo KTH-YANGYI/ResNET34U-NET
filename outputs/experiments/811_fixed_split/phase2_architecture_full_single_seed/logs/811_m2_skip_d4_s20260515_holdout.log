@@ -1,0 +1,1 @@
+{'holdout_count': 80, 'labeled_count': 45, 'metrics_available': True, 'threshold': 0.65, 'min_area': 48, 'postprocess_source': 'val', 'postprocess_path': '/mimer/NOBACKUP/groups/smart-rail/Yi Yang/CV_contact_wire/UNET_two_stage/outputs/experiments/811_fixed_split/phase2_architecture_full_single_seed/811_m2_skip_d4_s20260515/stage2/val_metrics.json'}
